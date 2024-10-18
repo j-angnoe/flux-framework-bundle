@@ -46,13 +46,13 @@ Vue.component('toast-container', {
 				return msg.message === message.message;
 			});
 
-			if (!originalMessage.length) {
+			if (true || !originalMessage.length) {
 				this.messages.unshift(message);
 			} else {
 				message = {...originalMessage[0], ...message};
 			}
 
-			let timeoutTime = 5e3;
+			let timeoutTime = 2e3;
 
 			if (message.timeout) {
 				clearTimeout(message.timeout);

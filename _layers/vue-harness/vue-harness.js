@@ -27,30 +27,30 @@ window.VueBlocks = VueBlocks;
 	// one weakness: insertTab destroys your undo history...
 	var tab = "\t";
 	function insertTab(o, e){
-	    var kC = e.which;
+		var kC = e.which;
 	
-	    if (kC == 9 && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.mId) {         
-	        var oS = o.scrollTop;
-	        if (o.setSelectionRange) {
-	            var sS = o.selectionStart;
+		if (kC == 9 && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.mId) {         
+			var oS = o.scrollTop;
+			if (o.setSelectionRange) {
+				var sS = o.selectionStart;
 				var sE = o.selectionEnd;
-	            o.value = o.value.substring(0, sS) + tab + o.value.substr(sE);
-	            o.setSelectionRange(sS + tab.length, sS + tab.length);
-	            o.focus();
-	        }
-	        else if (o.createTextRange) {
-	            document.selection.createRange().text = tab;
-	            e.returnValue = false;
-	        }
-	        o.scrollTop = oS;
-	        e.mId = true;
-	        if (e.preventDefault) {  e.preventDefault(); }
-	        return false;
-	    }  return true; 
+				o.value = o.value.substring(0, sS) + tab + o.value.substr(sE);
+				o.setSelectionRange(sS + tab.length, sS + tab.length);
+				o.focus();
+			}
+			else if (o.createTextRange) {
+				document.selection.createRange().text = tab;
+				e.returnValue = false;
+			}
+			o.scrollTop = oS;
+			e.mId = true;
+			if (e.preventDefault) {  e.preventDefault(); }
+			return false;
+		}  return true; 
 	}
 	
 	Vue.directive('tab', (el) => {
-	    el.addEventListener('keydown', event => insertTab(el, event));
+		el.addEventListener('keydown', event => insertTab(el, event));
 	});
 // @endsnippet
 
@@ -70,86 +70,95 @@ window.VueBlocks = VueBlocks;
 	 * 
 	 */
 	
-	 Vue.prototype.link = function link(key) {
-	    this.__linksToStorage = this.__linksToStorage || {};
+	Vue.prototype.link = function link(key) {
+		this.__linksToStorage = this.__linksToStorage || {};
 
-	    var linkToStorage = (storage, storageKey) => {
-	        if (!window.APP_NAME) {
-	            console.error('Please set window.APP_NAME in this unit.');
-	            var APP_NAME = 'UnknownApp';
-	        } else {
+		var linkToStorage = (storage, storageKey) => {
+			if (!window.APP_NAME) {
+				console.error('Please set window.APP_NAME in this unit.');
+				var APP_NAME = 'UnknownApp';
+			} else {
 				var APP_NAME = window.APP_NAME;
 			}
 		
-	        var storageKey = [
-	            APP_NAME || this.$options._componentTag,
-	            storageKey
-	        ].filter(Boolean).join('.');
+			var fullStorageKey = [
+				APP_NAME || this.$options._componentTag,
+				storageKey
+			].filter(Boolean).join('.');
 	
-	        //console.log("Read " + storageKey);
+			// console.log("Read " + storageKey);
 	
-	        if (storage[storageKey]) {
-	            try { 
-					var storedData = JSON.parse(storage[storageKey] || 'null');
-
+			if (storage[fullStorageKey]) {
+				try { 
+					var storedData = JSON.parse(storage[fullStorageKey] || 'null');
 					// De nieuwe manier:
+
+					// console.log('Stored data is ', storedData);
+
 					if ('$$$value$$$' in storedData) {
 						this.$set(this, key, storedData['$$$value$$$']);
-					} else { 
-						// Per november 2022 is dit de oude manier.
-						// Na April 2023 verwijderd worden.
-						if (this[key] && !Array.isArray(this[key]) && typeof this[key] == 'object') {
-							storedData = {...this[key], ...storedData};
-						} else if (Array.isArray(this[key]) && storedData && !Array.isArray(storedData)) {
-							storedData = Object.values(storedData);
-						}
-		                this.$set(this, key, storedData)
-					}
-	                //console.log("Sets " + key + " to " + storageKey);
-	            } catch (ignore) {
-	                //console.log("Error reading " + storageKey, ignore);
-	            }
-	        }
-	
-	        var unwatcher = this.$watch(key, function(value) {
-	            //console.log("Updates " + storageKey);
-	            // @fixme: Throttle this function
-	            storage[storageKey]= JSON.stringify({'$$$value$$$': value});
-	        }, {deep:true});
+						// console.log("Sets " + key + " to " + storageKey, storedData['$$$value$$$']);
+					} 
+				} catch (ignore) {
+					// console.log("Error reading " + storageKey, ignore);
+				}
+			}
+
+			var writeValueToStorage = () => {
+				storage[fullStorageKey]= JSON.stringify({'$$$value$$$': this[key]});
+			}	
+			
+			var watcherWriteValueTimeout = null;
+			var unwatcher = this.$watch(key, function() {
+				// console.log("Watcher Updates " + storageKey + ' ' + value);
+				// @fixme: Throttle this function
+				clearTimeout(watcherWriteValueTimeout);
+				watcherWriteValueTimeout = setTimeout(writeValueToStorage, 25);
+			}, {deep:true});
 
 			this.__linksToStorage[key] = {
-				unlink() {
-					unwatcher();
+				restore: () => { 
+					// noop.
+					console.log('NOOP Restore');
 				},
-				forget() {
-					storage.removeItem(storageKey);
+				unlink: () => {
+					clearTimeout(watcherWriteValueTimeout);
+					unwatcher();
+					storage.removeItem(fullStorageKey);
+					console.log('Unlinking ' + key + ' from ' + storageKey);
+					setTimeout(() => {
+						this.__linksToStorage[key].restore = () => {
+							console.log('Restoring ' + key + ' to ' + storageKey);
+							writeValueToStorage();
+							linkToStorage(storage, storageKey);	
+						}
+					}, 25);
 				}
 			}
 			return this.__linksToStorage[key];
-	    };
+		};
 	
-	    return {
-	        to: {
-	            sessionStorage: (storageKey) => {
-	                return linkToStorage(sessionStorage, storageKey);
-	            },
-	            localStorage: (storageKey) => {
-	                return linkToStorage(localStorage, storageKey);
-	            }
-	        },
+		return {
+			to: {
+				sessionStorage: (storageKey) => {
+					return linkToStorage(sessionStorage, storageKey);
+				},
+				localStorage: (storageKey) => {
+					return linkToStorage(localStorage, storageKey);
+				}
+			},
+			restore: () => {
+				if (!this.__linksToStorage[key].restore) {
+					throw new Error('There is no link to restore for ' + key);
+				}
+				this.__linksToStorage[key].restore();
+			},
 			unlink: () => { 
 				try { 
 					this.__linksToStorage[key].unlink();
 				} catch (ignore) {} 
-			},
-			forget: () => { 
-				try { 
-					this.__linksToStorage[key].forget();
-				} catch (ignore) {
-
-				} 
 			}
-	    }
+		}
 	};
 	
 // @endsnippet
@@ -167,7 +176,7 @@ window.VueBlocks = VueBlocks;
 	var autoSaveHandlers = [];
 	
 	document.addEventListener('keydown', async (event) => {
-	    if (event.ctrlKey && event.key === "s") {
+		if (event.ctrlKey && event.key === "s") {
 			if (event.defaultPrevented) { 
 				return;
 			}
@@ -184,23 +193,23 @@ window.VueBlocks = VueBlocks;
 		
 			if (!autoSaveHandlers.length && event.target === document.body) {
 			//   console.log("DOE DIT");
-			  var forms = document.querySelectorAll('form');
+			var forms = document.querySelectorAll('form');
 			//   console.log("DIT ZIJN DE FORMS", forms);
-			  if (forms.length) {
+			if (forms.length) {
 				p = { form: forms[forms.length - 1], parentNode: document.body };
-			  }
+			}
 			}
 		
 			// console.log('ctrl-s', p);
 		
-	        while(p && p.parentNode) {
-	            if (p.autoSave) {
-	                return p.autoSave(event);
+			while(p && p.parentNode) {
+				if (p.autoSave) {
+					return p.autoSave(event);
 				}
 		
 				if (p.form) {
 				if (p.form.checkValidity && !p.form.checkValidity()) {
-				  p.form.reportValidity();
+				p.form.reportValidity();
 					return;
 				}
 		
@@ -213,49 +222,49 @@ window.VueBlocks = VueBlocks;
 					}));
 				}
 				return;
-			  }
+			}
 		
-	            p = p.parentNode;
-	        }
+				p = p.parentNode;
+			}
 	
 		if (autoSaveHandlers.length) {
-	        	autoSaveHandlers[autoSaveHandlers.length-1]();
-	    	}
-	    }
+				autoSaveHandlers[autoSaveHandlers.length-1]();
+			}
+		}
 	});
 	
 	Vue.directive('ctrl-s', {
-	    bind(el, attrs) {
-	        console.log(attrs.value);
+		bind(el, attrs) {
+			console.log(attrs.value);
 	
-	        el.autoSave = () => {
-	            attrs.value();
-	        }
+			el.autoSave = () => {
+				attrs.value();
+			}
 	
-	        autoSaveHandlers.push( () => {
-	            attrs.value();
-	        });
-	    },
-	    unbind(el) {
-	        autoSaveHandlers.pop();
-	    }
+			autoSaveHandlers.push( () => {
+				attrs.value();
+			});
+		},
+		unbind(el) {
+			autoSaveHandlers.pop();
+		}
 	});
 	
 // @endsnippet
 /* @snippet 561cad-fa2976-b27553-d60a7a */
-		  // Popup error 
-		  window.axios.interceptors.response.use(
-		  function(response) {
-		    // console.log(response, 'response intercepted');
-		    
-		    return response;
-		  },
-		  function(error) {
-		    if (error && error.response && error.response.status === 500) {
-		      popupError(error);
-		    }
-		    return Promise.reject(error);
-		  }
+		// Popup error 
+		window.axios.interceptors.response.use(
+		function(response) {
+			// console.log(response, 'response intercepted');
+			
+			return response;
+		},
+		function(error) {
+			if (error && error.response && error.response.status === 500) {
+			popupError(error);
+			}
+			return Promise.reject(error);
+		}
 		);
 		
 
@@ -269,15 +278,15 @@ window.VueBlocks = VueBlocks;
 		function popupError(error) {
 			var lastFocussed = document.activeElement;
 			window.dialog.dialog({
-		    width: 800,
-		    height: 800,
-		    centered: true,
-		    modal: true,
-		    title: '<span style="color:red;">Server error occured</span>',
-		    component: {
+			width: 800,
+			height: 800,
+			centered: true,
+			modal: true,
+			title: '<span style="color:red;">Server error occured</span>',
+			component: {
 				data: error && error.response || {},
-			  template: `
-			  <div>
+			template: `
+			<div>
 					<input style="position: absolute; left: -1000px;" v-focus>
 					<div v-if="data">
 						<div v-if="data.type">
@@ -318,11 +327,11 @@ window.VueBlocks = VueBlocks;
 						<div v-else>
 							<pre v-text="data"></pre>
 						</div>
-	            </div>
+				</div>
 				<div v-else>
 					$data:
-	                <pre style="white-space: pre-wrap;">{{$data}}</pre>
-	            </div>
+					<pre style="white-space: pre-wrap;">{{$data}}</pre>
+				</div>
 				</div>`,
 				methods: {
 					recoverStringData(stringData) { 
@@ -341,7 +350,7 @@ window.VueBlocks = VueBlocks;
 								try { 
 									line = JSON.parse(line);
 								} catch(ignore) { }
-	        }
+			}
 							result['line ' + i] = line;
 						}
 						return result;
@@ -357,21 +366,21 @@ window.VueBlocks = VueBlocks;
 /* @snippet fcb201-2ff8ae-94c4e6-e8f2b9 */
 
 	Vue.directive('autoheight', (el) => {
-	    el.wrap = 'off';
+		el.wrap = 'off';
 	
-	    var resizeFn = () => {
-	        var extra = el.scrollWidth > el.offsetWidth;
-	        el.style.height = (el.scrollHeight - 10) + 'px';
-	        el.style.height = (el.scrollHeight + (extra ? 25 : 5)) + 'px';
-	    };
-	    var timeout;
-	    var resizeFnDebounce = () => {
-	        clearTimeout(timeout);
-	        timeout = setTimeout(resizeFn, 50);
-	    };
-	    el.addEventListener('keyup', resizeFnDebounce)
-	    resizeFn();
-	    setTimeout(resizeFn, 50);
+		var resizeFn = () => {
+			var extra = el.scrollWidth > el.offsetWidth;
+			el.style.height = (el.scrollHeight - 10) + 'px';
+			el.style.height = (el.scrollHeight + (extra ? 25 : 5)) + 'px';
+		};
+		var timeout;
+		var resizeFnDebounce = () => {
+			clearTimeout(timeout);
+			timeout = setTimeout(resizeFn, 50);
+		};
+		el.addEventListener('keyup', resizeFnDebounce)
+		resizeFn();
+		setTimeout(resizeFn, 50);
 	});
 /* @endsnippet */
 
@@ -461,9 +470,9 @@ window.axios.interceptors.response.use(
 	 */
 	
 	Vue.directive('focus', {
-	    inserted(el) {
-	        el.focus()
-	    }
+		inserted(el) {
+			el.focus()
+		}
 	});
 	
 	/**
@@ -475,13 +484,13 @@ window.axios.interceptors.response.use(
 	 * @usage <div v-focus-first> .... <input name="input"> </div>
 	 */
 	Vue.directive('focus-first', {
-	    inserted(el) {
-	        setTimeout(() => {
-	            try { 
-	                el.querySelector('input,select,textarea').focus();
-	            } catch(ignore) { }
-	        }, 200);
-	    }
+		inserted(el) {
+			setTimeout(() => {
+				try { 
+					el.querySelector('input,select,textarea').focus();
+				} catch(ignore) { }
+			}, 200);
+		}
 	});
 	
 /* @endsnippet */
@@ -729,18 +738,18 @@ window.componentExists = Vue.prototype.componentExists = function (component) {
 function isScalar(mixedVar) {
 	// @fixme - moeten we `null` ook als scalar beschouwen?
 	return /boolean|number|string/.test(typeof(mixedVar));
-  }
-  
-  window.isScalar = isScalar;
-  Vue.prototype.isScalar = isScalar;
+}
+
+window.isScalar = isScalar;
+Vue.prototype.isScalar = isScalar;
 
 // shortcuts for json stringify and parse.
 function json(...args) { 
-    // by default nice output with 3 spaces
-    if (args.length == 1) { 
-        args = [...args, null, 3];
-    }
-    return JSON.stringify(...args)
+	// by default nice output with 3 spaces
+	if (args.length == 1) { 
+		args = [...args, null, 3];
+	}
+	return JSON.stringify(...args)
 }
 json.parse = JSON.parse.bind(JSON);
 

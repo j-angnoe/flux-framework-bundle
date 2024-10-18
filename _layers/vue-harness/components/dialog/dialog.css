@@ -30,6 +30,7 @@ body.dialog-modal-overlay-active .dialog-container {
     box-shadow: 0 0 20px #333;
 }
 .dialog-container .dialog-title {
+    user-select:none;
     position: relative;
     padding: 20px 20px;
     font-size: 130%;
@@ -37,6 +38,8 @@ body.dialog-modal-overlay-active .dialog-container {
     background: white;
     white-space: nowrap;
     text-overflow: ellipsis;
+    padding-right: 50px;
+    overflow: hidden;
 }
 
 .dialog-container .dialog-close {
@@ -54,13 +57,33 @@ body.dialog-modal-overlay-active .dialog-container {
 .dialog-container .dialog-content {
     position: absolute;
     overflow: auto;
-
     top: 0px;
     left: 0;
     right: 0;
     bottom: 0;
     padding: 10px 20px;
 }
+
+.dialog-container .dialog-resize { 
+    position: absolute;
+    z-index: 1000;
+    right: 0;
+    bottom: 0;
+    width: 30px;
+    height: 30px;
+    background: transparent;
+    opacity: 0.0;
+    cursor: nwse-resize;
+    /* border-top: 30px solid transparent; */
+    border-bottom: 30px solid black;
+    border-left: 30px solid transparent;
+    user-select:none;
+    transition: 0.1s;
+}
+.dialog-container .dialog-resize:hover {
+    opacity:0.5;
+} 
+
 .dialog-container.with-title .dialog-content {
     top: 75px;
 }

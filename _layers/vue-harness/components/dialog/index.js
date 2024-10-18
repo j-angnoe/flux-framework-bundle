@@ -170,6 +170,8 @@ Vue.component("flux-dialog", {
     <div class="dialog-content">
       <slot ></slot>
 		</div>
+    <div class="dialog-resize">
+    </div>
 	</div>
 	`,
 
@@ -359,16 +361,20 @@ Vue.component("flux-dialog", {
 
         if (event.target.matches('.dialog-title, .dialog-title *')) {
           operationType = 'translate';
-        } else if (relY < 15) {
+        } else if (relY < 30) {
           operationType = 'translate';
-        } else if (relY > (bb.height - 30) && relX > (bb.width - 30)) {
+        } else if (event.target.matches('.dialog-resize')) {
           operationType = 'resize';
         } else {
-          console.log({relX, relY}, bb);
           return;
         }
 
         if (operationType) { 
+          
+          document.body.addEventListener('mouseup', event => {
+            clearTimeout(timeout);
+          }, {once: true});
+
           timeout = setTimeout(() => {
             registerMouseHandlers();
 
@@ -385,7 +391,7 @@ Vue.component("flux-dialog", {
             }
           }, 200)
 
-          event.preventDefault();
+          // event.preventDefault();
         }
       });
 
@@ -433,7 +439,6 @@ Vue.component("flux-dialog", {
         bottom: this.styles.bottom || (mousePosition.pos.y + height),
         right: this.styles.right || (mousePosition.pos.x + width)
       }
-      
       
       mousePosition.pos.x += 20;
       mousePosition.pos.y += 20;
