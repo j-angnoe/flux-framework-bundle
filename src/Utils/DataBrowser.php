@@ -17,6 +17,7 @@ class DataBrowser {
         $datasource = (new Chain($this->datasource))->cache('1h', [
             'id' => __METHOD__ . json_encode($this->name),
             'refreshCache' => (bool) ($previewOptions['refreshCache'] ?? false),
+            'reverse' => (bool) ($previewOptions['reverse'] ?? false),
         ]);
         
         if ($previewOptions['search'] ?? false) { 
