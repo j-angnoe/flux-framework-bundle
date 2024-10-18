@@ -214,7 +214,7 @@ class SimpleBridge implements ServerBridgeInterface {
                                         if (event.data) { 
                                             batch.push(event.data);
                                         }
-                                        if (batch.length > 10) { 
+                                        if (batch.length > 100) { 
                                             callback(batch)
                                             batch = []
                                         } else { 
