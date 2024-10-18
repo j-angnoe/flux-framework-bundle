@@ -40,8 +40,10 @@ class ChainCacheTest extends TestCase {
             ->cache('5m', $cacheOptions);
     }
 
-
-    function testCachingCapabilities() { 
+    /**
+     * @test
+     */
+    function test_caching_capabilities() { 
         $this->startTimer();
 
         $myCacheId = __METHOD__ . uniqid();
@@ -63,7 +65,10 @@ class ChainCacheTest extends TestCase {
         $this->assertItWasFast();
     }
 
-    function testAnonymousCacheIsRecognizedByStacktrace() {
+    /**
+     * @test
+     */
+    function anonymous_cache_is_recognized_by_stacktrace() {
         $this->startTimer();
         $this->getCacheSource([], true)->run();
         $this->assertItWasSlow();
@@ -71,5 +76,23 @@ class ChainCacheTest extends TestCase {
         $this->startTimer();
         $this->getCacheSource([], false)->run();
         $this->assertItWasFast();
+    }
+
+    /**
+     * @test
+     */
+
+    function it_can_serve_reversed() { 
+        $source1 = chain([1,2,3,4,5])->cache('1m', ['id' => 'mycache', 'reverse' => true,'refreshCache' => true]);
+
+        $result = $source1->toArray();
+        $this->assertArrayHasKey('To cache', $source1->getStats());
+        $this->assertEquals([5,4,3,2,1], $result);
+
+        $source2 = chain([1,2,3,4,5])->cache('1m', ['id' => 'mycache', 'reverse' => true]);
+        $result = $source2->toArray();
+        $this->assertArrayHasKey('From cache', $source2->getStats());
+
+        $this->assertEquals([5,4,3,2,1], $result);
     }
 }

@@ -85,10 +85,64 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
 
 	protected static function convertStream($source, $object): Traversable { 		
 		return call_user_func(function($source, $object) {
-			while(false !== ($line = fgets($source))) {
-				$object->stats['read_lines']++;
-				$object->stats['read_bytes']+=strlen($line);
-				yield $line;
+			$lastLine = '';
+			do { 
+				$chunk = fread($source, 8*1024);
+				
+				$lines = explode("\n", $lastLine . $chunk);
+				$lastLine = array_pop($lines);
+
+				$object->stats['read_bytes'] += strlen($chunk);
+				$object->stats['read_lines'] += count($lines);
+
+				yield from $lines;
+			} while (!feof($source));
+
+			if ($lastLine) {
+				yield $lastLine;
+				$object->stats['read_lines'] += 1;
+			}
+		}, $source, $object);
+	}
+
+	public static function convertStreamReverse($source, $object): Traversable { 		
+		return call_user_func(function($source, $object) {
+			$firstLine = '';
+			fseek($source, -1, SEEK_END);
+			$position = ftell($source);
+			$chunkSize = 8*1024; // rand(50,100);
+
+			// if (fgets($source) !== "\n") { 
+			// 	$position += 1;
+			// }
+			
+			do { 
+				// echo("read from $position - $chunkSize\n");
+				fseek($source, max(0, $position - $chunkSize ));
+				$chunk = strrev(fread($source, min($position, $chunkSize)));
+				
+				// echo "Chunk size = " . strlen($chunk) . " vs " . $chunkSize . "\n";
+				$lines = explode("\n", $firstLine . $chunk);
+				$firstLine = array_pop($lines);
+				// print_r($lines);
+				// print_r(array_map('strrev', $lines));
+
+				$position -= strlen($chunk);
+
+				// print_R([$lines, 'rest' => $firstLine]);
+				if ($object) { 
+					$object->stats['read_bytes'] += strlen($chunk);
+					$object->stats['read_lines'] += count($lines);
+				}
+
+				foreach ($lines as $line) {
+					yield strrev($line);
+				}
+			} while ($position > 0);
+
+			if ($firstLine) {
+				yield strrev($firstLine);
+				if ($object) $object->stats['read_lines'] += 1;
 			}
 		}, $source, $object);
 	}

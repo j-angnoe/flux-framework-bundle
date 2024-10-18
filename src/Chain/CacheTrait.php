@@ -16,6 +16,7 @@ trait CacheTrait {
 		$expires = is_array($expires) ? $options['expires'] : $expires;
 		$shouldRefreshCache = $options['refreshCache'] ?? false;
 		unset($options['refreshCache']); // so it wont affect the id.
+		$shouldReverse = $options['reverse'];
 
         $expireSeconds = null;
         if (is_int($expires)) {
@@ -69,6 +70,10 @@ trait CacheTrait {
             }
 		}
 		
+		$convertStreamFunction = fn(...$args) => static::convertStream(...$args);
+		if ($shouldReverse) { 
+			$convertStreamFunction = fn(...$args) => static::convertStreamReverse(...$args);
+		}
         if (file_exists($fullPath)) { 
 			$age = time() - filemtime($fullPath);
 			$jsonlines = $options['jsonlines'] ?? false;
@@ -85,13 +90,15 @@ trait CacheTrait {
 
             // dd("Age = $age, expires = $expireSeconds");
 
-			
+
             if ($mayUseCache) {
 				
 				// dd("USE CACHE");
-				$handle = fopen($fullPath,'r');
 				
-				$this->result = static::convertStream($handle, $this);
+				$handle = fopen($fullPath,'r');
+
+				$this->result = $convertStreamFunction($handle, $this);
+
 				if ($jsonlines) {
 					$this->fromJsonlines();
 				}
@@ -109,14 +116,15 @@ trait CacheTrait {
             }
 		}
 				
-        return $this->apply(function ($iterator) use ($fullPath, $options) {
+        return $this->apply(function ($iterator) use ($fullPath, $options, $convertStreamFunction) {
 			// Eerst naar een busy file schrijven
-			$handle = fopen($options['file'].'.busy', 'w+');
+			$busyFile = $options['file'].'.'.uniqid().'.busy';
+			$handle = fopen($busyFile, 'w+');
 			
 			$this->stats['To cache'] = $fullPath;
 			$jsonlines = $options['jsonlines'] ?? false;
-			foreach ($iterator as $key => $line) {
-				if (!is_string($line)) {
+			foreach ($iterator as $line) {
+				if (!is_scalar($line)) {
 					$jsonlines = true;
 					$line = json_encode($line, JSON_UNESCAPED_SLASHES + JSON_THROW_ON_ERROR);
 				}
@@ -126,11 +134,13 @@ trait CacheTrait {
 				}
 			}
 
+			// var_dump($jsonlines);
+
 			error_Log('Writing to '. $options['file']);
 			
 			fflush($handle);
 			// Als alles succesvol was, dan pas wegschrijven.
-			rename($options['file'].'.busy', $options['file']);
+			rename($busyFile, $options['file']);
 			if ($jsonlines) { 
 				rename($fullPath, "$fullPath.jsonl");
 				symlink("$fullPath.jsonl", $fullPath);
@@ -145,14 +155,14 @@ trait CacheTrait {
 			if ($jsonlines) { 
 				$json_decode = function_exists("simdjson_decode") ? "simdjson_decode" : "json_decode";
 
-				foreach (static::convertStream($handle, $this) as $line) {
+				foreach ($convertStreamFunction($handle, $this) as $line) {
 					$char = substr($line, 0, 1);
 					if ($char === '{' || $char === '[') {
 						yield $json_decode($line, 1);
 					}
 				}
 			} else {
-				yield from static::convertStream($handle, $this);
+				yield from $convertStreamFunction($handle, $this);
 			}
 		});
         return $this;
