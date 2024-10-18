@@ -1,0 +1,34 @@
+/** @common e5da0b-156d5c-494533-b53424/toast.css
+ */
+
+/** 
+ * This layout sets the toast message on the left.
+ **/
+ .toast-container {
+	position: fixed;
+	right: 5px;
+	top: 50px;
+	background: white;
+	z-index:100000;
+}
+
+.toast-message {
+	padding: 5px;
+	width: 200px;
+	font-size: 120%;
+	text-align: left;
+	background: rgba(255,255,255,0.1);
+	margin-bottom: 5px;
+    box-shadow: 0 0 5px #aaa;
+}
+.toast-message-error {
+	background: #B71C1C;
+	color: white;
+	white-space: pre-wrap;
+}
+
+.toast-message-success {
+	background: rgb(35, 194, 7);
+	color: white;
+	white-space: pre-wrap;
+}

@@ -1,0 +1,73 @@
+/* @common e11e3d-98d579-b5c5c1-28784a/dialog.css
+*/
+.dialog-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0,0,0,0.35);
+
+    z-index: 1000;
+}
+body.dialog-modal-overlay-active > *:not(.dialog-modal-overlay):not(.dialog-container) {
+    filter: blur(5px) grayscale(60%);
+}
+
+.dialog-container {
+    position: absolute;
+    overflow: auto;
+    /*
+    width: 400px;
+    height: 400px;
+    */
+    box-shadow: 0 0 10px #aaa;
+    border: 1px solid #ddd;
+    background-color: white;
+    z-index: 1000;
+}
+body.dialog-modal-overlay-active .dialog-container {
+    box-shadow: 0 0 20px #333;
+}
+.dialog-container .dialog-title {
+    position: relative;
+    padding: 20px 20px;
+    font-size: 130%;
+    border-bottom: 1px solid #ddd;
+    background: white;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.dialog-container .dialog-close {
+    position: absolute;
+    right: 0;
+    top: 0;
+    padding: 20px;
+    z-index: 1000;
+}
+.dialog-container .dialog-close:hover {
+    background: #eee;
+    cursor: pointer;
+    border-radius: 10%;
+}
+.dialog-container .dialog-content {
+    position: absolute;
+    overflow: auto;
+
+    top: 0px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 10px 20px;
+}
+.dialog-container.with-title .dialog-content {
+    top: 75px;
+}
+
+
+.dialog-container .dialog-content pre {
+    background: inherit;
+    color: inherit;
+    border: none;
+}

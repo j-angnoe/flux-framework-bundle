@@ -1,0 +1,16 @@
+{
+    "name": "fluxfx/framework-bundle",
+    "type": "symfony-bundle",
+    "autoload": {
+        "psr-4": {
+            "Flux\\Framework\\": "src/"
+        }
+    },
+    "require": {
+        "php": ">=8.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.4",
+        "symfony/http-client": "^7.1"
+    }
+}

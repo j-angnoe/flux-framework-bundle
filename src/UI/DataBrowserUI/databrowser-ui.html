@@ -1,0 +1,113 @@
+<template component="databrowser" props="loader, size">
+    <table class="table table-sm">
+        <tr v-if="hasLoaderFunction">
+            <td colspan=100>
+                <input 
+                    v-model="quicksearch" 
+                    @keyup.enter="performSearch(quicksearch)"
+                    @keyup.esc="quicksearch = ''; performSearch('')"
+                    @keydown.ctrl.p.prevent="printMode"
+                >
+                <button @click="performSearch(quicksearch, true)"><i class="fa fa-refresh"></i></button>
+            </td>
+        </tr>
+        <tr>
+            <th v-for="h in headers">{{h}}</th>
+            <th style="width:100%;"></th>
+        </tr>
+        <tr v-for="r in rows.slice(0,100)" @dblclick="$emit('open', r)">
+            <td v-for="c in cells" v-html="representValue(r[c], c, r)">
+            </td>
+            <td style="width:100%;"></td>
+        </tr>
+        <tfoot>
+            <tr>
+                <td colspan=100>
+                    <span v-if="loading">
+                        <i class="fa fa-spin fa-spinner"></i> loading...
+                    </span>
+                    <span v-else>
+                        {{ total_records || rows?.length || 0 }} results.
+                    </span>
+                </td>
+            </tr>
+        </tfoot>
+    </table>
+    <style scoped>
+    td, th { 
+        white-space: nowrap;
+        font-size: 90%;
+    }
+    </style>
+    <script>
+    return class vue {
+        quicksearch = '';
+        loading = false;
+        computed = {
+            headers() { 
+                return Object.keys(this?.data?.[0] || {});
+            },
+            cells() { 
+                return this.headers;
+            },
+            rows() { 
+                return this.data || [];
+            },
+            hasLoaderFunction() {
+                return typeof this.loader == 'function';
+            }
+        }
+        data = null;
+        total_records = null;
+        async mounted() {
+            this.loading = true;
+            if (this.loader.then) { 
+                var data = await this.loader;
+            } else {
+                var data = await this.loader({
+                    size: this.size || null
+                });
+            }
+            this.getResultsFromLoader(data);
+            this.loading = false;
+
+        }
+        async getResultsFromLoader(data) { 
+            var data = await Promise.resolve(data);
+            Object.assign(this, data);
+        }
+        async performSearch(search, refreshCache = false) { 
+            this.loading = true;
+            this.getResultsFromLoader(this.loader({ 
+                size: this.size || null, 
+                search, 
+                refreshCache
+            }));
+            this.loading = false;
+        }
+        async printMode() { 
+            if (this.loader.post) {
+                this.loader.post({search: this.quicksearch, size: 'all', mode: 'print'});
+            } else {
+                alert("No print-mode is available on this loader unfortunately.");
+            }
+        }
+        representValue(value, column, row) { 
+            var htmlentities = (value) => `${value}`.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            if (value && this.isScalar(value)) { 
+                return htmlentities(value);
+            } else if (Array.isArray(value)) {
+                return '[array:' + value.length + ']';
+            } else if (!value) {
+                return JSON.stringify(value);
+            } else {
+                var keys = Object.keys(value);
+
+                var v = value.title || value.name || value.id || value[Object.keys(value)[0]];
+                
+                return '[object ' + htmlentities(v) + ']';
+            }
+        }
+    }
+    </script>
+</template>

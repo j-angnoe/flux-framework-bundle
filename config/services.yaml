@@ -1,0 +1,16 @@
+services:
+    _defaults:
+        autowire: true     
+        autoconfigure: true
+
+    Flux\Framework\Demos\:
+        resource: '../demos/'
+        tags: ['controller.service_arguments']
+
+    Flux\Framework\:
+        resource: '../src/'
+        tags: ['controller.service_arguments']
+        exclude: 
+            - '../src/Chain'
+            - '../src/Utils'
+        

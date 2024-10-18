@@ -1,0 +1,387 @@
+
+<template component="filtered" props="data">
+	<div>
+		<div style="position:sticky;top:0;">
+		    <input
+		        class="form-control"
+		        v-model="search"
+		        type="search"
+		        placeholder="Search"
+		        @keyup.enter="selectFirst()"
+		    >
+		</div>
+		<div>
+			<div v-if="search && filtered.length == 0">
+				<em>No results</em>
+			</div>
+			<template v-for="s in filtered">
+				<div @click="$emit('select',s)">
+					<slot name="item" v-bind="{item:s}"></slot>
+				</div>
+			</template>
+		</div>
+	</div>
+	<script>
+		export default {
+			data() {
+				return {
+					search: ''
+				}
+			},
+			computed: {
+				filtered() {
+					var regexp = new RegExp(this.search, 'i');
+					return this.data.filter(i => {
+						var str = typeof i == 'string' ? i : Object.values(i).join(',');
+						return regexp.test(str);
+					})
+				}
+			},
+			mounted() {
+
+			},
+			methods: {
+				selectFirst() {
+					if (this.filtered[0]) {
+						this.$emit('select', this.filtered[0]);
+					}
+				}
+			}
+		}
+	</script>
+</template>
+
+
+
+
+<template component="decide" props="value">
+	<div>
+		<template v-if="'tabs' in $attrs">
+			<nav class="nav nav-tabs">
+				<template v-for="(s, name) in $scopedSlots" v-if="!~name.indexOf('-title')">
+					<a class="nav-link" @click="$emit('input', name)" :class="{active: value == name}">{{name}}</a>
+				</template>
+			</nav>
+			<slot :name="value" v-if="value"></slot>
+		</template>
+		<template v-else>
+			<template v-for="(s, name) in $scopedSlots" v-if="!~name.indexOf('-title')">
+				<div class="list-group-item" @click="$emit('input', name)" :class="{active: value == name}">
+					<slot :name="name + '-title'">{{name}}</slot>
+				</div>
+				<div v-if="value == name">
+					<slot :name="name"></slot>
+				</div>
+			</template>
+		</template>
+	</div>
+</template>
+
+<template component="form-field" props="label">
+	<div class="form-group row">
+		<label class="col-form-label col-2">
+			<div v-if="$slots.label">
+				<slot name="label"></slot>
+			</div>
+			<div v-if="label">{{label || $attrs.name || $attrs.title}}</div>
+		</label>
+		<div class="col-10">
+			<slot></slot>
+		</div>
+	</div>
+</template>
+
+<!--
+
+<selector
+	:from="fnOrPromise"	// A source function, promise or array
+	:pipe="function" 		// A function to pipe the selected item through when selected.
+
+	// Output modes when selected, components receive item via `value` prop.
+
+	component="..."		// A two-column layout with the selector left and this component right.
+	popup=".." 				// Use dialog.dialog to create a popup which loads your component.
+	accordion=".."			// Each item expands in accordion mode and loads your component underneath it.
+	alert|debug						// Alert each tiem something is selected (debugging)
+
+	Popup and alert can be added and will have precedence on other output modes.
+
+	height=".." 			// Component mode make the columns overflow at certain height.
+>
+
+-->
+<template component="selector" props="from, pipe, height">
+	<div :class="componentMode ? 'row' : ''">
+		<div :class="componentMode ? 'col-3' : ''" :style="height ? { overflow: 'auto', height } : {}">
+			<slot name="left-top" v-bind="{items: list, filtered: ordered_list, item: active, filter: filterSetter, select }"></slot>
+			<template v-for="item in ordered_list">
+				<div class="list-group-item" :class="{
+						active: isActive(item),
+					}" @click="select(item)">
+					<slot name="item" v-bind="{item}">
+						{{
+					isScalar(item) ? item : (
+						item && item.name || item.title || item.caption || item.label || item.id
+					)
+					}}
+					</slot>
+				</div>
+				<div v-if="accordionMode && isActive(item)">
+					<slot name="content" v-bind="{ item: active }">
+						<div :is="getComponent($attrs.accordion)" :value="active"></div>
+					</slot>
+				</div>
+			</template>
+			<slot name="left-bottom" v-bind="{items: list, filtered: ordered_list,item: active, filter: filterSetter, select}"></slot>
+		</div>
+		<div v-if="componentMode && active" class="col-9" :style="height ? { overflow: 'auto', height } : {}">
+			<slot name="right-top" v-bind="{items: list, filtered: ordered_list, item: active, filter: filterSetter, select}"></slot>
+			<slot name="content" v-bind="{ item: active }">
+				<div :is="getComponent($attrs.component)" :value="active"></div>
+			</slot>
+			<slot name="right-bottom" v-bind="{items: list, filtered: ordered_list, item: active, filter: filterSetter, select}"></slot>
+		</div>
+	</div>
+	<style scoped>
+		.list-group-item {
+			cursor: pointer;
+			transition: background 0.3s;
+		}
+		.list-group-item:not(.active):hover {
+			background: #ffc;
+		}
+	</style>
+	<script>
+		return class vue {
+			list = null;
+			active = null;
+			activeId = null;
+			filterer = null;
+
+			watch = {
+				'$attrs.value'(val) {
+					if (val !== this.active) { 
+						this.select(this.list.find(n => this.equals(n, val)));
+					}
+				},
+				active(active) {
+					this.activeId = this.extractPrimaryKey(active);
+				}
+			};
+
+			computed = {
+				// Esnure that only ONE mode can be active at all times
+				// Even if multiple props are given!
+				mode() {
+					if ('alert' in this.$attrs || 'debug' in this.$attrs) {
+						return 'alert';
+					}
+					if ('popup' in this.$attrs) {
+						return 'popup';
+					}
+					if ('accordion' in this.$attrs) {
+						return 'accordion';
+					}
+					if ('component' in this.$attrs || 'content' in this.$scopedSlots) {
+						return 'component';
+					}
+				},
+				componentMode() { return this.mode == 'component'; },
+				alertMode() { return this.mode == 'alert'; },
+				popupMode() { return this.mode == 'popup'; },
+				accordionMode() { return this.mode == 'accordion'; },
+
+				ordered_list() {
+					if (this.filterer) { 
+						return this.list.filter(this.filterer);
+					}
+					return this.list;
+				}
+			};
+			async mounted() {
+				this.load();
+				if ('storage' in this.$attrs) {
+					this.link('activeId').to.localStorage(this.$attrs['storage']);
+				}
+			}
+			async load() {
+				console.log('selector::load');
+
+				if (typeof this.from == 'function') {
+					this.list = await this.from();
+				} else if (this.from && this.from.then) {
+					this.list = await Promise.resolve(this.from);
+				} else {
+					this.list = this.from;
+					this.$watch('from', this.load);
+				}
+				if (this.activeId && !this.active) {
+					this.select(this.list.find(n => this.extractPrimaryKey(n) === this.activeId));
+				}
+			}
+			isActive(item) {
+				if ('value' in this.$attrs) {
+					return this.$attrs.value == item || this.equals(this.$attrs.value, item);
+				} else {
+					return this.active == item || this.equals(this.active, item);
+				}
+			}
+			
+			extractPrimaryKey(item) { 
+				if (this.isScalar(item) || !item) {
+					return item;
+				}
+				
+				var keys = Object.keys(item).filter(k => k.match(/(id|name|title)/));
+				if (~keys.indexOf('id')) {
+					return item['id'];
+				}
+				if (keys.length) {
+					return item[keys[0]];
+				}
+				for (var i in item) {
+					if (`${item[i]}`.match(/^[0-9]+$/)) {
+						return item[i];
+					}
+				}
+				console.error("Could not extract a primary key from " + JSON.stringify(item));
+			}
+
+			equals(a, b) {
+				return this.extractPrimaryKey(a) == this.extractPrimaryKey(b);
+			}
+
+			filterSetter(filterCallback) {
+				this.filterer = filterCallback;
+			}
+
+			async select(item) {			
+				console.log('selector::select');
+
+				if (this.accordionMode && this.isActive(item)) {
+					this.active = null
+					if ('value' in this.$attrs) {
+						this.$emit('input', null);
+					}
+					return;
+				}
+				var emitItem = item;
+				this.active = null;
+				if (this.pipe) {
+					console.log('selector::select pipe()');
+					emitItem = await this.pipe(item);
+				}
+				if ('value' in this.$attrs) {
+					this.$emit('input', emitItem);
+				}
+				this.active = emitItem;
+				this.$emit('select', emitItem);
+				if (this.popupMode) {
+					dialog.launch(`<div width=500 height=500><${this.$attrs.popup} :value="value"></${this.$attrs.popup}></div>`, {
+						data: {
+							value: emitItem
+						},
+						components: this.$parent.$options.components
+					});
+				}
+				if (this.alertMode) {
+					alert(JSON.stringify(emitItem, null, 3));
+				}
+			}
+
+			isScalar(v) {
+				return /boolean|number|string/.test(typeof v) || !v;
+			}
+
+			getComponent(componentName) {
+				if (this.$options.components[componentName]) {
+					return this.$options.components[componentName];
+				} else if (this.$parent.$options.components[componentName]) {
+					return this.$parent.$options.components[componentName]
+				} else {
+					return componentName;
+				}
+			}
+			
+		}
+	</script>
+</template>
+
+
+<template component="edit-on-dblclick" props="value">
+    <div v-if="!editing" @dblclick="editing = true">
+        <slot>
+            {{value}}
+        </slot>
+    </div>
+    <div v-else-if="editing">
+        <input :value="value" @keyup.esc="editing = false" @keyup.enter="var v = $event.target.value; $emit('input', v); editing = false" class="form-control">
+    </div>
+    <script>
+        'short';
+        return class {
+            editing = false;
+        }
+    </script>
+</template>
+
+
+<template component="harness-upload-file">
+    <form method="POST" ref="form" enctype="multipart/form-data" action="/upload" target="uploadIframe">
+        <input 
+			type="file" 
+			v-bind="{multiple: multi }" 
+			required 
+			:name="'file' + (multi ? '[]' : '')" 
+			onchange="this.form.submit()">
+        <input type="submit" value="upload">
+        <iframe ref="iframe" name="uploadIframe"></iframe> 
+    </form>
+    <script>
+    return class vue {
+		computed = {
+			multi() {
+				return 'multiple' in this.$attrs || 'multi'  in this.$attrs;
+			}
+		}
+        async mounted() { 
+            var self = this;
+
+            this.$refs.iframe.onload = function() {
+            // expect this.finishedUploading to be called.
+
+            self.errorMessage = '';
+            self.$refs.iframe.style = 'display:none;';
+
+            try {
+                if (this.contentDocument.documentURI === 'about:blank') {
+                return;
+                }
+
+                console.log(this.contentDocument);
+
+                if (this.contentDocument.contentType === "application/json") {
+                var pre_text = this.contentDocument.getElementsByTagName("pre")[0].innerHTML;
+				var data = JSON.parse(pre_text);
+				self.$refs.form.reset();
+                self.finishedUploading(data);
+                return;
+                }
+            } catch (e) {
+                alert(e);
+            }
+
+            self.errorMessage = 'Failed uploading document';
+            self.$refs.iframe.style = 'border:3px solid red; width:100%;height:400px;display:block';
+            };
+        }
+        finishedUploading(result) {
+            if (this.$listeners['input']) { 
+                this.$emit('input', result);
+            } else {
+                this.debug(result);
+            }
+        }
+    }
+    </script>
+</template>
