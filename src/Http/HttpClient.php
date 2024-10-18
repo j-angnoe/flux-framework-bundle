@@ -15,99 +15,6 @@ use Symfony\Component\HttpClient\HttpClient as SymfonyHttpClient;
 use Symfony\Contracts\Service\ResetInterface;
 use Traversable;
 
-class DecoratedResponse implements ResponseInterface { 
-    function __construct(
-        private ResponseInterface $response, 
-        private LoggerInterface $logger) {
-
-        if ($response instanceof DecoratedResponse) { 
-            throw new \LogicException('Double decorations occurs, please review your HttpClient class stack');
-        }
-        $this->logger->debug('http: > ' . $this->response->getInfo('effective_method'). ' ' . $this->response->getInfo('url'));
-    }
-
-    function getStatusCode(): int
-    {
-        $statusCode = $this->response->getStatusCode();
-        $this->recordStats();
-        return $statusCode;
-    }
-
-    function getHeaders(bool $throw = true): array
-    {
-        $headers = $this->response->getHeaders($throw);
-        $this->recordStats();
-        return $headers;
-    }
-
-    function getContent(bool $throw = true): string
-    {
-        $content = $this->response->getContent($throw);
-        $this->recordStats();
-        return $content;
-    }
-
-    function toArray(bool $throw = true): array
-    {
-        $array = $this->response->toArray($throw);
-        $this->recordStats();
-        return $array;
-    }
-
-    function cancel(): void
-    {
-        $this->response->cancel();
-    }
-
-    function getInfo(?string $type = null): mixed
-    {
-        if ($type === 'debug') { 
-            return HttpClient::debugResponse($this->response);
-        }
-        return $this->response->getInfo($type);
-    }
-
-    private $lastDelta = [];
-
-    public function recordStats() { 
-        $i = fn($k) => $this->response->getInfo($k);
-
-        $delta['resps'] = 1;    
-        $delta['b_down'] = $i('size_download');
-        $delta['b_up'] = $i('size_upload');
-        $statusCode = intval($i('http_code') ?: 0);
-        $statusKey = 'http_' . $statusCode;
-        $delta[$statusKey] = 1;
-        
-        if (!$this->lastDelta) { 
-            $this->logger->debug('http: < HTTP ' . ($statusCode) . ' ' . $i('content_type') . ' (' . $i('size_download') . ' bytes)');
-            if (intdiv($statusCode,100) !== 2) {
-                $this->logger->warning('http: HTTP ' . $statusCode . ' on '.$i('url'));
-            }
-        }
-
-        foreach ($this->lastDelta as $k => $v) { 
-            HttpClient::$HTTP_STATS[$k] -= $v;
-        }
-        foreach ($delta as $k=>$v) { 
-            HttpClient::$HTTP_STATS[$k] ??= 0;
-            HttpClient::$HTTP_STATS[$k] += $v;
-        }
-        $this->lastDelta = $delta;
-    }
-
-    function getResponse(): ResponseInterface {
-        return $this->response;
-    }
-    function __destruct() { 
-        $this->recordStats();
-    }
-
-    function debug() { 
-        dd($this->getInfo('debug'));
-    }
-}
-
 class HttpClient implements HttpClientInterface {
     static $HTTP_STATS = [
         'reqs' => 0,
@@ -120,7 +27,7 @@ class HttpClient implements HttpClientInterface {
 
     public function __construct(?HttpClientInterface $client = null)
     {
-        $this->client = $client ?? HttpClient::create();
+        $this->client = $client ?? SymfonyHttpClient::create();
     }
 
     public function withOptions(array $options): static
@@ -158,14 +65,18 @@ class HttpClient implements HttpClientInterface {
         static::$logger = $logger;
     }
 
-    function request(string $method, string $url, array $options = []): ResponseInterface
+    function request(string $method, string $url, array $options = []): DecoratedResponse
     {
         $options['user_data'] ??= $options['body'] ?? null;
 
         static::$HTTP_STATS['reqs'] += 1;
         static::$logger ??= new NullLogger;
 
-        return new DecoratedResponse($this->client->request($method, $url, $options), static::$logger);
+        return new DecoratedResponse(
+            $this->client->request($method, $url, $options), 
+            static::$logger,
+            $this,
+        );
     }
 
     static function debugResponse(ResponseInterface $response) {
