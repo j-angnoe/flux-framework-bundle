@@ -71,7 +71,9 @@ class IoC implements ContainerInterface {
             }
             if (count($positionalArgs) > 0) { 
                 $resolvedArgs[$paramIdx] = array_shift($positionalArgs);
-            } else if (!$param->isOptional()) {
+            } else if ($param->isOptional()) {
+                $resolvedArgs[$paramIdx] = $param->getDefaultValue();
+            } else { 
                 throw new ArgumentCountError('Missing argument #'.$paramIdx . ' ('.$paramName.' of type `'.$requestedType.')');
             }
         }
