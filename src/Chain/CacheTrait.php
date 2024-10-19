@@ -16,7 +16,7 @@ trait CacheTrait {
 		$expires = is_array($expires) ? $options['expires'] : $expires;
 		$shouldRefreshCache = $options['refreshCache'] ?? false;
 		unset($options['refreshCache']); // so it wont affect the id.
-		$shouldReverse = $options['reverse'];
+		$shouldReverse = $options['reverse'] ?? false;
 
         $expireSeconds = null;
         if (is_int($expires)) {
