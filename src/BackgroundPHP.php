@@ -100,9 +100,13 @@ class BackgroundPHP {
         
         $serializeVariables = $refl->getStaticVariables();
         foreach ($serializeVariables as $varname => $value) {
-            if (is_object($value)) {
-                $source .= '$' . $varname . ' = unserialize(' . var_export(serialize($value), true) . ');' . PHP_EOL;
-                continue;
+            try { 
+                if (is_object($value)) {
+                    $source .= '$' . $varname . ' = unserialize(' . var_export(serialize($value), true) . ');' . PHP_EOL;
+                    continue;
+                }
+            } catch (\Throwable $e) { 
+                throw new \Exception($e->getMessage() . ' at variable $'.$varname . ' of type ' . get_class($value));
             }
             $source .= '$' . $varname . ' = ' . var_export($value, true) . ';' . PHP_EOL;
         }
