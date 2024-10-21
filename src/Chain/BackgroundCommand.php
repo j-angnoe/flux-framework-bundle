@@ -80,8 +80,14 @@ class BackgroundCommand implements \IteratorAggregate, \JsonSerializable {
             'stderr' => 'stderr > ',
         ];
 
-        $runWhile = function () { 
-            return file_exists(static::TMP_DIR . $this->token . '/pid.txt');
+
+        $runWhile = function () use (&$deadAt) { 
+            if (!file_exists(static::TMP_DIR . $this->token . '/pid.txt')) { 
+                $deadAt ??= microtime(true);
+                // 250ms to catch up / fsync etc.
+                return (microtime(true) - $deadAt) < 0.10;
+            }
+            return true;
         };
 
         $streamPositions = [
