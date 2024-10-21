@@ -88,8 +88,10 @@ trait StandardChainTerminatorsTrait {
 	// @test output('php://stderr') - outputs to stderr
 	// @test output(null) - does execute but outputs nothing
 	function output($handle = null): int {
+		$shouldClose = true;
 		if (is_resource($handle)) { 
 			// do nothing to handle.
+			$shouldClose = false;
 		} else if (is_string($handle)) {
 			$handle = fopen($handle,'w');
 		} else if (func_num_args() == 1 && $handle === null) { 
@@ -97,6 +99,7 @@ trait StandardChainTerminatorsTrait {
 			$handle = fopen('/dev/null', 'w');
 		} else {
 			$handle = fopen('php://output','w');
+			$shouldClose = false;
 		}
 
 		if (!is_resource($handle)) {
@@ -112,13 +115,19 @@ trait StandardChainTerminatorsTrait {
 			}
 			$this->stats['out_lines']++;
 			if (is_string($r)) {
-				$str = rtrim($r) . "\n";
+				$str = $r;
+				if (!str_ends_with($r, "\n")) { 
+					$str .= "\n";
+				}
 			} else {
 				$str =json_encode($r) . "\n";
 			}
 			$this->stats['out_bytes'] += strlen($str);
 			fputs($handle, $str);
 			$writtenLines++;
+		}
+		if ($shouldClose) {
+			fclose($handle);
 		}
 		if ($this->debug) { 
 			$nice_num = function() {
