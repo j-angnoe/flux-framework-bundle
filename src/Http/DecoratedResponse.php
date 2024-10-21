@@ -102,9 +102,17 @@ class DecoratedResponse implements ResponseInterface {
     }
 
     /**
-     * @return \Generator<ChunkInterface>
+     * @return \Generator<string>
      */
     function stream(): \Generator {
+        foreach ($this->parent->stream($this) as $chunk) {
+            yield $chunk->getContent();
+        } 
+    }
+    /**
+     * @return \Generator<ChunkInterface>
+     */
+    function streamChunks(): \Generator {
         foreach ($this->parent->stream($this) as $chunk) {
             yield $chunk;
         } 
@@ -129,13 +137,7 @@ class DecoratedResponse implements ResponseInterface {
     }
 
     function streamJson(?string ...$jsonPointer): \Traversable {
-        $fn = function () {
-            foreach($this->stream() as $chunk) {
-                yield $chunk->getContent();
-            }
-        };
-
-        $parser = JsonParser::parse($fn());
+        $parser = JsonParser::parse($this->stream());
         foreach ($jsonPointer as $jp) {
             $parser->pointer($jp);
         };
