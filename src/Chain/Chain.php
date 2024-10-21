@@ -680,11 +680,17 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
 	}
 
 	// @test toCsv() converts you tabular data to array.
-	function toCsv($separator = null, $enclosure = null, $escape = null, $eol = null, $preventCsvInjection = true): static { 
-		$args = func_get_args();
-		return $this->apply(function($iterator) use ($args, $preventCsvInjection) {
+	function toCsv($separator = ',', $enclosure = '"', $escape = "\\", $eol = PHP_EOL, $preventCsvInjection = true, $outputHeaders = false): static { 
+		$args = [$separator, $enclosure, $escape, $eol];
+		return $this->apply(function($iterator) use ($args, $preventCsvInjection, &$outputHeaders) {
 			$handle = fopen('php://memory', 'r+');
+
 			foreach ($iterator as $row) { 
+				if ($outputHeaders) {
+					$headers = array_map(fn($x) => ltrim($x, '= '), array_keys($row));
+					fputcsv($handle, $headers, ...$args);
+					$outputHeaders = false;
+				}
 				if ($preventCsvInjection) { 
 					foreach ($row as $k=>$v) {
 						if (str_starts_with(ltrim($v),'=')) { 

@@ -115,7 +115,8 @@ trait DownloaderTrait {
                         foreach ($completeHeaders as $h) { 
                             $value = $item[$h] ?? null;
                             if (is_scalar($value)) { 
-                                $orderedRow[] = $value;
+                                // Prevent CSV Macro stuff... remove = signs from start.
+                                $orderedRow[] = ltrim('=', $value);
                             } else {
                                 $orderedRow[] = '[array]';
                             }
