@@ -7,6 +7,7 @@ use ReflectionMethod;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedJsonResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class SimpleBridge implements ServerBridgeInterface { 
@@ -77,13 +78,13 @@ class SimpleBridge implements ServerBridgeInterface {
 
             $result = call_user_func_array([$controller, $methodName], $newArgs);
 
-            if ($result instanceof \Generator) {
-                $result = iterator_to_array($result);
-            }
-
             // Ensures any iterator related error can be captured here.
             if (!($result instanceof Response)) { 
-                $result = new JsonResponse($result, 200);
+                if (!is_scalar($result)) { 
+                    $result = new StreamedJsonResponse($result, 200);
+                } else {
+                    throw new \Exception('Endpoint ' . $request->getUri() . ' returns a scalar result `'.var_export($result,true).'`');
+                }
             }
         } catch (\Throwable $e) {
             if ($wantsJson) {
