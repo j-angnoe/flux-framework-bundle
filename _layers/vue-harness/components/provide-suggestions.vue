@@ -24,7 +24,7 @@
 						suggestion: true, 
 						highlight: (index == selectedIndex) 
 					}">
-                    <slot name="display" v-bind="s">
+                    <slot name="display" v-bind="isScalar(s) ? {value: s} : s">
                     </slot>
                 </tr>
             </table>
@@ -34,7 +34,7 @@
 						highlight: (index == selectedIndex) 
 					}">
 
-                    <slot name="display" v-bind="s">
+                    <slot name="display" v-bind="isScalar(s) ? {value: s} : s">
                         {{ displayItem(s) }} 
                     </slot>
                 </li>
@@ -125,7 +125,8 @@ export default {
 
         },
         selectedIndex() {
-            this.$refs.sc.scrollTop = this.selectedIndex * this.$el.querySelector('.highlight').offsetHeight;
+            var hl = this.$el.querySelector('.highlight');
+            this.$refs.sc.scrollTop = this.selectedIndex * (hl && hl.offsetHeight || 0);
         }
     },
     async mounted() {
@@ -136,6 +137,19 @@ export default {
             console.log(this.search, 'search from target');
         } else {
             this.search = this.$el.querySelector('input');
+            if (!this.search) {
+                var promise = new Promise((resolve) => {
+                    var keydownListener = event => {
+                        if (event.target.matches('input') && this.$el.contains(event.target)) {
+                            resolve(event.target);
+                            document.removeEventListener('keydown', keydownListener);
+                        }
+                    };
+                    document.addEventListener('keydown', keydownListener);
+                });
+                this.search = await promise;
+                console.log("Found search ", this.search);
+            }
         }
 
 
@@ -184,17 +198,29 @@ export default {
                 this.resolve(null);
                 event.preventDefault();
             }
-            if (event.key == 'Enter') {
-                if (this.suggestions) {
+            if (event.key === 'Tab' && event.shiftKey) { 
+                return;
+            }
+
+            var doSelectValue = event.key == 'Enter' || event.key === 'Tab';
+            
+            // if (this.$attrs.separator) { 
+            //     doSelectValue = doSelectValue || event.key.match(this.$attrs.separator);
+            // }
+            if (doSelectValue) {
+                if (this.lastResolved === this.suggestions[this.selectedIndex]) {
+                    this.suggestions = null;
+                    return;
+                } else if (this.suggestions) {
+                    this.lastResolved = this.suggestions[this.selectedIndex];
                     this.resolve(this.suggestions[this.selectedIndex]);
                     event.preventDefault();
-
-
-                    if (event.ctrlKey || event.metaKey) {
-                        // Als je ctrl+enter doet dan sluiten we de
-                        // suggesties sowieso. (zeker ook met ook op multi mode)
-                        this.search.blur();
-                    }
+                }
+                if (event.ctrlKey || event.metaKey || event.key === 'Tab') {
+                    event.preventDefault();
+                    // Als je ctrl+enter doet dan sluiten we de
+                    // suggesties sowieso. (zeker ook met ook op multi mode)
+                    this.focusNext();
                 }
             }
             if (event.key.match(/(ArrowUp|ArrowDown)/)) {
@@ -220,6 +246,17 @@ export default {
         }
     },
     methods: {
+        focusNext() { 
+             if (this.search.form) {
+                var i = 0;
+                for (i = 0; i < this.search.form.length; i++) {
+                    if (this.search.form[i] == this.search) {
+                        var e = this.search.form[i + 1];
+                        e && e.focus();
+                    }
+                }
+            }
+        },
         resolve(value) {
             if ('value' in this.$attrs) {
                 this.$emit('input', value);
@@ -236,7 +273,9 @@ export default {
 
                 this.search.blur();
                 // alert("VALUE in attrs");
-                this.search.value = this.displayItem(value);
+                if (!('select' in this.$listeners) && !('input' in this.$listeners)) {
+                    this.search.value = this.displayItem(value);
+                }
 
                 if (this.search.form) {
                     var i = 0;
@@ -251,6 +290,10 @@ export default {
             this.focus = false;
         },
         async performSearch(term, callback) {
+
+            if (this.$attrs.multi) { 
+                term = term.substr(0, this.search.selectionEnd).split(/[ ,]/).pop();
+            }
 
             var call = this.$attrs.call || this.$attrs.from || null;
             this.loading = true;
@@ -271,9 +314,7 @@ export default {
             }
 
             this.searchPromise.finally(() => {
-                setTimeout(() => {
-                    this.loading = false;
-                }, 250)
+                this.loading = false;
             })
             if (callback) {
                 callback(await this.searchPromise);

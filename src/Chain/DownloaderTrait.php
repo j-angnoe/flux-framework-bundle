@@ -132,6 +132,9 @@ trait DownloaderTrait {
                 if (isset($_POST[sha1($filename)])) {
                     $chain->quicksearch($_POST[sha1($filename)]);
                 }
+                if (isset($_POST['excel'])) { 
+                    $chain->outputDownload('excel', $options);
+                }
 
                 do { 
                     ob_end_flush();
@@ -148,13 +151,13 @@ trait DownloaderTrait {
                 echo '</form>';
 
                 if (class_exists('XlsxWriter')) { 
-                    $downloadRPC = json_decode($_POST['rpc'], true);
-                    $downloadRPC[1][1]['mode'] = 'excel';
-                    $downloadRPC = json_encode($downloadRPC);
-
-                    echo '<form method="post" style="display: inline-block;">
-                        <input type="hidden" name="rpc" value="'.htmlentities($downloadRPC).'">
-                        <input type="submit" value="Excel">';
+                    $newPOST = $_POST;
+                    $newPOST['excel'] = 1;
+                    echo '<form method="post" style="display: inline-block;">';
+                    foreach ($newPOST as $k=>$v) { 
+                        echo '<input type="hidden" name="'.htmlentities($k).'" value="'.htmlentities($v).'">';
+                    }
+                    echo '<input type="submit" value="Excel">';
                     echo '</form>';
                 }
 

@@ -3,6 +3,7 @@
 namespace Flux\Framework\UI\Vue2SPA;
 
 use Flux\Framework\Utils\IoC;
+use JsonSerializable;
 use ReflectionMethod;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -78,9 +79,17 @@ class SimpleBridge implements ServerBridgeInterface {
 
             $result = call_user_func_array([$controller, $methodName], $newArgs);
 
+
+            if ($result instanceof JsonSerializable) {
+                // This was implemented so that DataBrowser can render on jsonSerialize.
+                // DataBrowser::jsonSerialize returns a StreamedJsonResponse.
+                $result = $result->jsonSerialize();
+            }
             // Ensures any iterator related error can be captured here.
             if (!($result instanceof Response)) { 
-                if (!is_scalar($result)) { 
+                if (is_object($result)) {
+                    return new JsonResponse($result, 200);
+                } else if (!is_scalar($result)) { 
                     $result = new StreamedJsonResponse($result, 200);
                 } else {
                     throw new \Exception('Endpoint ' . $request->getUri() . ' returns a scalar result `'.var_export($result,true).'`');
@@ -91,7 +100,7 @@ class SimpleBridge implements ServerBridgeInterface {
 
                 return new JsonResponse([
                     'error' => get_class($e) . ': ' . $e->getMessage() . ' in file ' . $e->getFile(). ' on line ' . $e->getLine(),
-                    'trace' => ($_ENV['APP_DEBUG'] ?? false) ? $e->getTrace() : [],
+                    'trace' => ($_ENV['APP_DEBUG'] ?? false) ? $e->getTraceAsString() : [],
                 ], 500);
             } else {
                 throw $e;
@@ -113,8 +122,8 @@ class SimpleBridge implements ServerBridgeInterface {
         HTML;
     }
     function generateJavascriptClient(): string
-    {
-        return <<<'HTML'
+    {        
+        return str_replace('RELEASE_ID', urlencode($_ENV['APP_RELEASE_ID'] ?? ''), <<<'HTML'
         <script>
             var responseHandler = async (res) => {
                 if (res.ok) return res.json();
@@ -174,7 +183,13 @@ class SimpleBridge implements ServerBridgeInterface {
                 })
             }
 
+            function addCacheBust(url) {
+                return url + (~url.indexOf('?') ? '&' : '?') + '_=RELEASE_ID'
+            };
+
             function createSimpleBridge(baseUri) {
+                baseUri = `${baseUri}`.split('#')[0];
+
                 return new Proxy({
                     call(url, post) {
                         return postCall(url, post).then(responseHandler);
@@ -185,8 +200,8 @@ class SimpleBridge implements ServerBridgeInterface {
                             return obj[methodName];
                         }
                         var fn = function(...args) {
-                            var href = `${baseUri}`.split('#')[0];
-                            return postCall(href + '?' + methodName, {
+                            var href = baseUri;
+                            return postCall(addCacheBust(href + '?' + methodName), {
                                 rpc: [methodName,args]
                             }).then(responseHandler);
                         }   
@@ -197,50 +212,81 @@ class SimpleBridge implements ServerBridgeInterface {
                             return fn2;
                         }   
                         fn.eventStream = function (...args) { 
-                            var href = `${baseUri}`.split('#')[0];
-                            var es = new EventSource(href + (~href.indexOf('?') ? '&' : '?') + 'eventstream=1&rpc=' + encodeURIComponent(JSON.stringify([methodName, args])), {
-                                withCredentials: true
-                            });
-                            es.addEventListener('finished', event => {
-                                es.close();
-                            })
+                            var href = baseUri;
+                            var es;
+                            var listeners = [];
+                            var reconnectTimeout;
+                            var reconnects = 0;
+                            var reconnect = () => {
+                                if (es) { es.close(); es = null } ;
+                                es = new EventSource(href + (~href.indexOf('?') ? '&' : '?') + 'eventstream=1&rpc=' + encodeURIComponent(JSON.stringify([methodName, args])), {
+                                    withCredentials: true
+                                });
+                                listeners.forEach(([key, value, options]) => {
+                                    es.addEventListener(key, value, options);
+                                });
+
+                                es.addEventListener('error', (e) => {
+                                    console.log('connection e', e);
+                                    return;
+                                    /* @fixme ... this does not work */
+                                    clearTimeout(reconnectTimeout);
+                                    reconnects += 1;
+                                    if (reconnects > 30) {
+                                        console.log("Maximum amount of reconnects reached. Refresh the page if your still there.");
+                                        return;
+                                    }
+                                    reconnectTimeout = setTimeout(reconnect, 5000);
+                                });
+                                es.addEventListener('finished', event => {
+                                    clearTimeout(reconnectTimeout);
+                                    es.close();
+                                })
+                            }; 
+
+                            reconnect();
 
                             // Expose a throttled version 
                             // this simplifies client usage of eventStreams.
-                            var addEventListener = es.addEventListener.bind(es);
-                            es.addEventListener = function(eventName, callback, options) { 
-                                if (eventName === 'batch') {
-                                    var batch = [];
-                                    return addEventListener('message', event => {
-                                        if (event.data) { 
-                                            batch.push(event.data);
-                                        }
-                                        if (batch.length > 100) { 
-                                            callback(batch)
-                                            batch = []
-                                        } else { 
-                                            globalThis.requestIdleCallback(() => {
-                                                if (batch.length) { 
-                                                    callback(batch);
-                                                }
-                                                batch = [];
-                                            });
-                                        }
-                                    })
-                                }
-                                addEventListener(eventName, event => {
-                                    globalThis.requestIdleCallback(() => {
-                                        callback(event.data);
-                                    });
-                                }, options);
+                            var addEventListener = (key, value, options) => {
+                                listeners.push([key,value,options]);
+                                es.addEventListener(key, value, options);
                             }
 
-                            es.originalAddEventListener = addEventListener;
-
-                            return es;
+                            return {
+                                close() { 
+                                    es.close();
+                                },
+                                addEventListener(eventName, callback, options) {
+                                    if (eventName === 'batch') {
+                                        var batch = [];
+                                        return addEventListener('message', event => {
+                                            if (event.data) { 
+                                                batch.push(event.data);
+                                            }
+                                            if (batch.length > 100) { 
+                                                callback(batch)
+                                                batch = []
+                                            } else { 
+                                                globalThis.requestIdleCallback(() => {
+                                                    if (batch.length) { 
+                                                        callback(batch);
+                                                    }
+                                                    batch = [];
+                                                });
+                                            }
+                                        })
+                                    }
+                                    addEventListener(eventName, event => {
+                                        globalThis.requestIdleCallback(() => {
+                                            callback(event.data);
+                                        });
+                                    }, options);
+                                }
+                            }
                         }
                         fn.post = function(...args) { 
-                            var href = `${baseUri}`.split('#')[0];
+                            var href = baseUri;
                             var form = document.createElement('form');
                             form.action = href + (~href.indexOf('?') ? '&' : '?') + "sbm=print&" + methodName;
                             form.method = "POST";
@@ -273,7 +319,7 @@ class SimpleBridge implements ServerBridgeInterface {
             window.createSimpleBridge = createSimpleBridge;
             window.server = createSimpleBridge(document.location);
         </script>
-        HTML;
+        HTML);
     }
 
 }

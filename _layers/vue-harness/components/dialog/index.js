@@ -483,7 +483,7 @@ Vue.component("flux-dialog", {
         offset.x = -1 * overflow.horizontal;
       }
       
-      if (!(this.fullscreen || this.centered || this.styles.left || this.overlay )) {
+      if (!(this.fullscreen || this.centered || ('left' in this.styles) || ('right' in this.styles) || this.overlay )) {
         this.$el.style.left = (mousePosition.pos.x + offset.x) + "px";
         this.$el.style.top = (mousePosition.pos.y + offset.y) + "px";
 

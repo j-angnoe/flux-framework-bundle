@@ -180,17 +180,13 @@ class Vue2SPA
         $content = HtmlUtils::prepend('head','<base href="'.$_SERVER['REQUEST_URI'].'">', $content);
         
         $response = new Response($content, 200, ['Content-type' => 'text/html']);
-        
-        /* @fixme - we want some caching on these
-        // but it doesnt work yet.
-        */
 
-        if ($_ENV['APP_DEBUG'] ?? false) {        
+        if ($request->isXmlHttpRequest()) {      
             $response->headers->set(AbstractSessionListener::NO_AUTO_CACHE_CONTROL_HEADER, 'true');
             $response->setPublic();
             $response->setMaxAge(1*3600);
         }
-
+        
         $response->headers->set('Content-Type', 'text/html');
         // $response->headers->set('Content-length', strlen($content));
         return $response;

@@ -163,7 +163,7 @@ __halt_compiler();
                 this.running = false;
             })
         }
-        async unmounted() {
+        async destructor() {
             this.es?.close();
         }
 

@@ -90,10 +90,62 @@ class ArrayUtils {
     }
 
     /**
+     * Visit each scalar value in an array.
+     * 
+     * Usage:
+     * ArrayUtils::visitKeyValues($array, function(&$array, $key, $value, $fullAddress) {
+     *  
+     *      $visitedKeys[] = $fullKey;
+     * 
+     *      if ($key === 'offensive') {
+     *          unset($array[$key]
+     *      }
+     * });
+     * 
+     * About the addresses
+     * The address is a `full` path to a given value in a nested structure, 
+     * but without array indexes. Take for instance this data:
+     * 
+     * $array = [
+     *      'id' => 1,
+     *      'meta' => [
+     *          'x' => 1,
+     *          'y' => 2
+     *      ],
+     *      'comments' => [
+     *          ['id' => 1.1', 'title' => 'Awesome']
+     *      ]
+     *  ]
+     * 
+     *  The visited key values and addresses will look like:
+     *  key     value       address
+     *  id      1           id
+     *  x       1           meta.x
+     *  y       2           meta.y
+     *  id      1.1         comments.id
+     *  title   Awesome     comments.title
+     */
+    static function visitKeyValues(array &$array, \Closure $callback, array $path = []): void { 
+        if (is_array($array) && array_is_list($array)) { 
+            foreach ($array as $key=>$value) { 
+                static::visitKeyValues($array[$key], $callback, $path);
+            }
+        } else if (is_array($array)) { 
+            foreach ($array as $key=>$value) { 
+                if (is_scalar($value)) { 
+                    $fullKey = join('.', array_merge($path, [$key]));
+                    $callback($array, $key, $value, $fullKey);
+                } else { 
+                    static::visitKeyValues($array[$key],  $callback, array_merge($path, [$key]));
+                }
+            }
+        }
+    }
+    /**
      * array_pop + the possibility to `pop` a specific key, it removes the key
      * from the array and returns the result ;-)
      */
-    static function pop(&$array, $key = null) { 
+    static function pop(&$array, $key = null): mixed { 
         if ($key) { 
             $return = $array[$key] ?? null;
             unset($array[$key]);
@@ -101,6 +153,10 @@ class ArrayUtils {
         } else {
             return array_pop($array);
         }
+    }
+
+    static function get($array, $key): mixed { 
+        return $array[$key] ?? null;
     }
 
 

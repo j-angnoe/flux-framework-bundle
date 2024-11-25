@@ -347,38 +347,4 @@ class HttpClientTest extends TestCase {
         $this->assertEquals('Line 1', $lines[0]);
         $this->assertEquals('Line 3', $lines[2]);
     }
-
-    /**
-     * @test
-     */
-    function it_can_work_with_json_parser() { 
-        $mock = new MockHttpClient([
-            new MockResponse(<<<RESP
-            {
-                "meta": {
-                    "records": 4
-                },
-                "data": [
-                    {"id": 1},
-                    {"id": 2},
-                    {"id": 3},
-                    {"id": 4}
-                ]
-            }
-            RESP)
-        ]);
-
-        $http = new HttpClient($mock);
-
-        $resp = $http->request('GET', 'whatever');
-        
-        $result = [];
-        foreach ($resp->streamJson('/meta', '/data/-') as $key => $value) { 
-            $result[is_numeric($key) ? 'data' : $key][] = $value;
-        }
-        $this->assertArrayHasKey('meta', $result);
-        $this->assertArrayHasKey('data', $result);
-        $this->assertCount(4, $result['data']);
-        $this->assertEquals(['id' => 3], $result['data'][2]);
-    }
 }

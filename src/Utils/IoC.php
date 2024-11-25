@@ -9,7 +9,7 @@ use ReflectionFunctionAbstract;
 class IoC implements ContainerInterface {
     private array $services = [];
 
-    function get(string $id)
+    function get(string $id): mixed 
     {
         return $this->services[$id];
     }   

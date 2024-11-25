@@ -12,6 +12,7 @@ use EmptyIterator;
 use Flux\Framework\Chain\CacheTrait;
 use Flux\Framework\Chain\StandardChainTerminatorsTrait;
 use GlobIterator;
+use NoRewindIterator;
 
 // Just an interface to define stuff as chainable.
 // Use this to as return type to indicate 
@@ -638,7 +639,7 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
 			}
 			
 			// Done iterating, give the results.
-			if ($direction == 'desc') { 
+			if ($direction === 'desc') { 
 				$values = array_reverse($values);
 			}
 			foreach ($values as $v) {
@@ -901,18 +902,20 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
 		return new LazyChain($args, static::class);
 	}
 
-	static function fromCsv($file, $separator = ',') { 
+	function fromCsv(string $separator = ',', string $enclosure = '"', string $escape = '\\', bool $interpretFirstLineAsHeaders = true) { 
+		$this
+			->map(fn($line) => str_getcsv($line, $separator, $enclosure, $escape))
+		;
 
-		return new static(function () use ($file, $separator) { 
-			$handle = fopen($file,'r');
-			$headers = fgetcsv($handle, null, $separator);
-			while(false !== $line = fgetcsv($handle, null, $separator)) {
-				if ($line && $line !== [null]) { 
-
+		if ($interpretFirstLineAsHeaders) { 
+			return $this->apply(function($iterator) { 
+				$headers = $iterator->current();
+				$iterator->next();
+				foreach (new \NoRewindIterator($iterator) as $line) {
 					yield array_combine($headers, $line);
 				}
-			}
-		});
+			});
+		}
 	}
 
 	/**
@@ -1069,6 +1072,43 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
 		};
 	}
 
+	function union(iterable $dataset): static { 
+		return $this->apply(function($iterator) use ($dataset) {
+			yield from $iterator;
+			yield from $dataset;
+		});
+	}
+
+	function buffer(?int $howMany = null) {
+		$buffer = [];
+		foreach ($this->result as $key=>$value)  {
+			$buffer[$key] = $value;
+			if ($howMany !== null && count($buffer) >= $howMany) { 
+				break;
+			}
+		}
+		return $this->apply(function($iterator) use ($buffer) { 
+			yield from $buffer;
+			yield from $iterator;
+		});
+	}
+
+	function when($condition, Closure $function, Closure $otherwise = null) { 
+        $result = null;
+        if ($condition) {
+            $result = call_user_func($function, $this);
+        } else {
+            if ($otherwise) { 
+                $result = call_user_func($otherwise, $this);
+            }
+        }
+
+        if ($result instanceof Chainable) {
+            return $result;
+        }
+
+        return $this;
+    }
 }
 
 class LazyChain implements Chainable { 

@@ -45,6 +45,7 @@ class Shell implements \IteratorAggregate {
         $originalCommand = $command;
 		$command = preg_replace_callback('/([\'"]*)((?<!\$)\?|%s)\\1/', function ($match) use (&$args, $numArgs, $optstr, $originalCommand) { 
 			if (empty($args)) {
+                return $match[0];
                 throw new \Exception('Command `'.$originalCommand.'` contains more placeholders then arguments supplied ('.$numArgs.').');
 			}
 			$value = array_shift($args);
@@ -193,8 +194,13 @@ class Shell implements \IteratorAggregate {
     function getIterator(): Traversable { 
         
         $command = join(" | \n", $this->commands);
-        $pidfile = $this->pidfile ?: tempnam('/tmp/', 'shell-pids-');
-        $exitfile = dirname($pidfile).'/exitcode.txt';
+        if (!($this->pidfile ?? false)) { 
+            $pidfile = $this->pidfile ?: tempnam(ensure_dir('/tmp/shells/'), 'pid-');
+            $exitfile = $pidfile.'.exit';
+        } else {
+            $pidfile = $this->pidfile;
+            $exitfile = dirname($this->pidfile) . '/exitcode.txt';
+        }
         $wrappedCommand = static::formatCommand("echo \$\$ > ?; set -e; set -o pipefail; $command", $pidfile);
         $wrappedCommand = static::formatCommand(
             'bash -c ?; exit_code=$?; echo $exit_code > ?; rm ?; exit $exit_code', 
@@ -209,7 +215,7 @@ class Shell implements \IteratorAggregate {
             $this->stderrFile ? ['file', $this->stderrFile, 'w'] : ['pipe','w'],
         ];
 
-        $proc = proc_open($wrappedCommand, $descr, $pipes);
+        $proc = proc_open($wrappedCommand, $descr, $pipes, null, $_ENV);
         
         if ($this->stdoutFile) { 
             $pipes[1] = fopen($this->stdoutFile, 'r');
@@ -276,15 +282,17 @@ class Shell implements \IteratorAggregate {
                 array_shift($lastContent);
             }
         }
-
+        
         $status = proc_get_status($proc);
-
+        
         if (!$status['running'] && isset($status['exitcode'])) {
             if ($status['exitcode'] !== 0) { 
+                $lastContentWithErrors = $lastContent; // preg_grep('~(PHP|error)~i', $lastContent) ?: $lastContent;
+
                 throw new \Exception(sprintf(
                     "Command exited with code %d\n%s\n%s",
                     $status['exitcode'],
-                    join("\n", $lastContent),
+                    join("\n", $lastContentWithErrors),
                     "   ".str_replace("\n", "\n   ", $command)
                 ));
             }

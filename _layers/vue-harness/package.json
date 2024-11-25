@@ -21,6 +21,6 @@
   },
   "scripts": {
     "watch": "parcel watch *.js --no-hmr --no-source-maps --public-url ../dist",
-    "build": "parcel build *.js --no-source-maps --public-url ../dist"
+    "build": "rm -rf ../dist/**; parcel build *.js --no-source-maps --public-url ../dist"
   }
 }

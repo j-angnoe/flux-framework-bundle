@@ -208,21 +208,23 @@ window.VueBlocks = VueBlocks;
 				}
 		
 				if (p.form) {
-				if (p.form.checkValidity && !p.form.checkValidity()) {
-				p.form.reportValidity();
+					if (p.form.checkValidity && !p.form.checkValidity()) {
+						p.form.reportValidity();
+						return;
+					}
+					var submit = [...p.form.querySelectorAll('[type=submit]')].filter(s => {
+						return s.form === p.form
+					})
+					
+					if (submit[0]) { 
+						submit[0].click();
+					} else { 
+						p.form.dispatchEvent(new Event('submit', {
+							cancelable: true
+						}));
+					}
 					return;
 				}
-		
-				var submit = p.form.querySelector('[type=submit]');
-				if (submit) { 
-					submit.click();
-				} else { 
-					p.form.dispatchEvent(new Event('submit', {
-					cancelable: true
-					}));
-				}
-				return;
-			}
 		
 				p = p.parentNode;
 			}

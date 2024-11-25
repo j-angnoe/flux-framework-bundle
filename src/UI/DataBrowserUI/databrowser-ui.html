@@ -1,46 +1,76 @@
+
+
 <template component="databrowser" props="loader, size">
-    <table class="table table-sm">
-        <tr v-if="hasLoaderFunction">
-            <td colspan=100>
-                <input 
-                    v-model="quicksearch" 
-                    @keyup.enter="performSearch(quicksearch)"
-                    @keyup.esc="quicksearch = ''; performSearch('')"
-                    @keydown.ctrl.p.prevent="printMode"
-                >
-                <button @click="performSearch(quicksearch, true)"><i class="fa fa-refresh"></i></button>
-            </td>
-        </tr>
-        <tr>
-            <th v-for="h in headers">{{h}}</th>
-            <th style="width:100%;"></th>
-        </tr>
-        <tr v-for="r in rows.slice(0,100)" @dblclick="$emit('open', r)">
-            <td v-for="c in cells" v-html="representValue(r[c], c, r)">
-            </td>
-            <td style="width:100%;"></td>
-        </tr>
-        <tfoot>
-            <tr>
-                <td colspan=100>
-                    <span v-if="loading">
-                        <i class="fa fa-spin fa-spinner"></i> loading...
-                    </span>
-                    <span v-else>
-                        {{ total_records || rows?.length || 0 }} results.
-                    </span>
-                </td>
-            </tr>
-        </tfoot>
-    </table>
+    <div>
+        <databrowser-controls 
+            ref="databrowserControls"
+            :loader="loader"
+            v-on="$listeners"
+            @data="getResultsFromLoader"
+            :preview-options="previewOptions"
+            :title="$attrs.title"
+        >
+            <template #query="slotProps">
+                <slot name="query" v-bind="slotProps"></slot>
+            </template>
+        </databrowser-controls>
+        <slot name="table" v-bind="{rows}">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th v-if="$listeners['select']">&nbsp;</th>
+                        <th v-for="h in headers" @click="toggleSort(h, $event)">
+                            {{h}}
+                            <i class="fa fa-chevron-down" v-if="isSortedAsc(h)">
+                            </i>
+                            <i class="fa fa-chevron-up" v-if="isSortedDesc(h)">
+                            </i>
+                        </th>
+                        <th style="width:100%;"></th>
+                    </tr>
+                </thead>
+                <tbody v-for="r in rows.slice(0,100)" @dblclick="$listeners['open'] ? $emit('open', r) : debug(r)">
+                    <tr>
+                        <td v-if="$listeners['select']">
+                            <input 
+                                type="checkbox" 
+                                v-model="selection" 
+                                :value="r"
+                                @change="$emit('select', r, $event.target.checked)"
+                            >
+                        </td>
+                        <td v-for="c in cells">
+                            <slot :name="c" v-bind="{row: r, key: c, value: r[c], representValue}">
+                                <span v-html="representValue(r[c], c, r)"></span>
+                            </slot>
+                        </td>
+                        <td style="width:100%;"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </slot>
+        <div>
+            <span v-if="loading">
+                <i class="fa fa-spin fa-spinner"></i> loading...
+            </span>
+            <span v-else>
+                {{ total_records || rows?.length || 0 }} results.
+            </span>
+            <span class="databrowser-name">{{name}}</span>
+        </div>
+    </div>
     <style scoped>
     td, th { 
         white-space: nowrap;
         font-size: 90%;
     }
+    .databrowser-name { 
+        color: #999;
+    }
     </style>
     <script>
     return class vue {
+        selection = [];
         quicksearch = '';
         loading = false;
         computed = {
@@ -57,55 +87,211 @@
                 return typeof this.loader == 'function';
             }
         }
-        data = null;
-        total_records = null;
-        async mounted() {
-            this.loading = true;
-            if (this.loader.then) { 
-                var data = await this.loader;
-            } else {
-                var data = await this.loader({
-                    size: this.size || null
-                });
-            }
-            this.getResultsFromLoader(data);
-            this.loading = false;
+        previewOptions = {
+            sorts: {} 
+        };
 
+        data = null;
+        name = null;
+        total_records = null;
+
+        created() {
+            this.previewOptions = {
+                ...(this.previewOptions || {}),
+                ...(this.$attrs.previewOptions || {})
+            }
         }
         async getResultsFromLoader(data) { 
             var data = await Promise.resolve(data);
             Object.assign(this, data);
+            this.$emit('data', data);
+            this.$emit('sample', data.data.slice(0,50));
+            return data;
         }
-        async performSearch(search, refreshCache = false) { 
-            this.loading = true;
-            this.getResultsFromLoader(this.loader({ 
-                size: this.size || null, 
-                search, 
-                refreshCache
-            }));
-            this.loading = false;
-        }
-        async printMode() { 
-            if (this.loader.post) {
-                this.loader.post({search: this.quicksearch, size: 'all', mode: 'print'});
-            } else {
-                alert("No print-mode is available on this loader unfortunately.");
-            }
+        reload() { 
+            return this.$refs.databrowserControls.reload();
         }
         representValue(value, column, row) { 
             var htmlentities = (value) => `${value}`.replace(/</g,'&lt;').replace(/>/g,'&gt;');
             if (value && this.isScalar(value)) { 
                 return htmlentities(value);
             } else if (Array.isArray(value)) {
-                return '[array:' + value.length + ']';
+                return '[' + value.length + ' items]';
             } else if (!value) {
                 return JSON.stringify(value);
             } else {
                 var keys = Object.keys(value);
 
-                var v = value.title || value.name || value.id || value[Object.keys(value)[0]];
+                var v = value.title || value.name || value.id || (keys[0]+':'+value[keys[0]]);
                 
                 return '[object ' + htmlentities(v) + ']';
+            }
+        }
+
+        previewOptions = {sorts: {}}
+        toggleSort(column, event) { 
+            this.previewOptions.sorts[column] ??= null;
+            if (this.previewOptions.sorts[column] === null) {
+                this.previewOptions.sorts[column] = 1;
+            } else if (this.previewOptions.sorts[column] == 1) {
+                this.previewOptions.sorts[column] = -1;
+            } else {
+                this.previewOptions.sorts[column] = null;
+            }
+            if (event.ctrlKey) { 
+                this.$set(this, 'previewOptions', {...this.previewOptions});
+            } else {
+                this.$set(this, 'previewOptions', {
+                    ...this.previewOptions,
+                    sorts: { 
+                        [column]: this.previewOptions.sorts[column]
+                    }
+                });
+            }
+        }
+        isSortedAsc(column) {
+            return this.previewOptions.sorts?.[column] === 1;
+        }
+        isSortedDesc(column) {
+            return this.previewOptions.sorts?.[column] === -1;
+        }
+    }
+    </script>
+</template>
+
+<template component="databrowser-controls" props="loader, previewOptions">
+    <div style="display:flex; gap: 0.5em;">
+        <div style="line-height: 1.75rem;" v-if="$attrs.title"><b>{{$attrs.title}}</b></div>
+        <div v-if="typeof loader === 'function'" style="display:flex; gap: 0.5em;">
+            <div class="input-group" style="max-width: 200px;">
+                <input 
+                    v-model="quicksearch" 
+                    class="form-control form-control-sm quicksearch"
+                    @keydown.enter.stop.prevent="performSearch(quicksearch)"
+                    @keyup.esc="quicksearch = ''; performSearch('')"
+                    @keydown.ctrl.p.prevent="printMode"
+                >
+                <div class="input-group-append">
+                    <button 
+                        class="btn btn-sm btn-primary"
+                        @click="performSearch(quicksearch, true)"
+                        :disabled="loading"
+                        >
+                        <i class="fa fa-refresh" :class="{'fa-spin':loading}"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="btn-group">
+                <div class="btn btn-sm btn-primary" @click="skip -= 25; reload()">
+                    &lt;
+                </div>
+                <div class="form-text form-text-sm" v-if="total_records" class="form-text">
+                    {{ total_records }} records
+                </div>
+                <div class="btn btn-sm btn-primary" @click="skip += 25; reload()">
+                    &gt;
+                </div>
+            </div>
+        </div>
+        <div class="form-text">
+            <slot name="query" v-bind="{ addQuery }"></slot>
+        </div>
+    </div>
+    <style scoped>
+    .form-text { 
+        white-space: nowrap;
+    }
+    .btn-group .form-text { 
+        margin-top: 0;
+        background: white;
+        padding-top: 0.25rem;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+    input.quicksearch { 
+        width: 80px;
+    }
+    </style>
+    <script>
+    return class vue {
+        quicksearch = '';
+        total_records = -1;
+        loading = false;
+        skip = 0;
+
+        lastPreviewOptions = null;
+
+        watch = {
+            previewOptions(newValue) {
+                var oldValue = this.lastPreviewOptions;
+                if (json(oldValue) !== json(newValue)) { 
+                    this.performSearch(this.quicksearch, false, newValue);
+                }
+                this.lastPreviewOptions = clone(newValue);
+            }
+        }
+        async mounted() {
+            this.loading = true;
+            if (this.loader.then) { 
+                var data = await this.loader;
+            } else {
+                if (this.previewOptions?.search) { 
+                    this.quicksearch = this.previewOptions.search;
+                }
+                var data = await this.loader({
+                    ...(this.previewOptions || {}), 
+                    ...{
+                        size: this.size || null
+                    }
+                });
+            }
+            this.getResultsFromLoader(data);
+            this.loading = false;
+        }
+        query = {}
+        async setQuery(filterKey, filterValue) { 
+            if (filterKey && typeof filterKey === 'object') { 
+                this.query = filterKey;
+            } else if (typeof filterValue !== 'undefined') {
+                this.query = {[filterKey]: filterValue};
+            } 
+            await this.performSearch(this.quicksearch);
+        }
+        async addQuery(filterKey, filterValue) { 
+            this.query[filterKey] = filterValue;
+            await this.performSearch(this.quicksearch);
+        }
+        async reload(options) {
+            options = options || {};
+            return this.performSearch(this.quicksearch, options.refreshCache || false, options);
+        }
+        async performSearch(search, refreshCache = false, otherOptions = {}) { 
+            this.loading = true;
+            try { 
+                await this.getResultsFromLoader(this.loader({ 
+                    size: this.size || null, 
+                    search: this.quicksearch, 
+                    refreshCache,
+                    skip: this.skip,
+                    query: this.query,
+                    ...otherOptions
+                }));
+            } finally { 
+                this.loading = false;
+            }
+        }
+        async getResultsFromLoader(data) { 
+            var data = await Promise.resolve(data);
+            Object.assign(this, data);
+            this.$emit('data', data);
+            this.$emit('sample', data.data.slice(0,50));
+            return data;
+        }
+        async printMode() { 
+            if (this.loader.post) {
+                this.loader.post({search: this.quicksearch, size: 'all', mode: 'print'});
+            } else {
+                alert("No print-mode is available on this loader unfortunately.");
             }
         }
     }

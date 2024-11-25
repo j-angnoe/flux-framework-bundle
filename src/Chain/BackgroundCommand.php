@@ -151,7 +151,7 @@ class BackgroundCommand implements \IteratorAggregate, \JsonSerializable {
                 $callback($line);
             }
         }
-        $event('exitcode', file_get_contents(static::TMP_DIR.$this->token.'/exitcode.txt'));
+        $event('exitcode', file_get_contents(static::TMP_DIR . $this->token.'/exitcode.txt'));
         $event('finished', 'bye', $this->serializePositions());
     }
 }

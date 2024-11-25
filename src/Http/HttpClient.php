@@ -2,7 +2,6 @@
 
 namespace Flux\Framework\Http;
 
-use JsonException;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\HttpClient\Exception\ClientException;
@@ -14,6 +13,7 @@ use Symfony\Contracts\HttpClient\ResponseStreamInterface;
 use Symfony\Component\HttpClient\HttpClient as SymfonyHttpClient;
 use Symfony\Contracts\Service\ResetInterface;
 use Traversable;
+use Closure;
 
 class HttpClient implements HttpClientInterface {
     static $HTTP_STATS = [
@@ -23,9 +23,9 @@ class HttpClient implements HttpClientInterface {
         'b_up' => 0,
     ];
 
-    protected HttpClientInterface $client;
+    private HttpClientInterface|Closure|null $client;
 
-    public function __construct(?HttpClientInterface $client = null)
+    public function __construct(HttpClientInterface|Closure|null $client = null)
     {
         $this->client = $client ?? SymfonyHttpClient::create();
     }
@@ -45,8 +45,6 @@ class HttpClient implements HttpClientInterface {
         }
     }
 
-    
-
     static function create(array $defaultOptions = [], int $maxHostConnections = 6, int $maxPendingPushes = 50) { 
         return new static(SymfonyHttpClient::create($defaultOptions, $maxHostConnections, $maxPendingPushes));
     }
@@ -56,6 +54,9 @@ class HttpClient implements HttpClientInterface {
     }
 
     protected function getHttpClient(): HttpClientInterface { 
+        if ($this->client instanceof \Closure) { 
+            $this->client = ($this->client)();
+        }
         return $this->client;
     }
 
@@ -67,31 +68,46 @@ class HttpClient implements HttpClientInterface {
 
     function request(string $method, string $url, array $options = []): DecoratedResponse
     {
+        $client = $this->getHttpClient();
+        if ($client instanceof HttpClient) {
+            return $client->request($method, $url, $options);
+        }
+        
         $options['user_data'] ??= $options['body'] ?? null;
+        if (!is_string($options['user_data'])) { 
+            $options['user_data'] = json_encode($options['user_data']);
+        }
 
         static::$HTTP_STATS['reqs'] += 1;
         static::$logger ??= new NullLogger;
 
-        return new DecoratedResponse(
-            $this->client->request($method, $url, $options), 
+        $resp = $this->getHttpClient()->request($method, $url, $options);
+        $resp = new DecoratedResponse(
+            $resp, 
             static::$logger,
             $this,
         );
+        return $resp;
     }
 
     static function debugResponse(ResponseInterface $response) {
-        
+        if ($response instanceof DecoratedResponse) { 
+            return $response->getInfo('debug');
+        }
         $debugInfo = $response->getInfo('debug');
 
         $pieces = preg_split("~(\r*\n){2}~", $debugInfo);
-        if (count($pieces) === 1) { 
-            return $pieces[0];
+        if (count($pieces) < 2) { 
+            return firstval($pieces) ?: print_r($response->getInfo(), true);
         }
+        
+        // Remove the thousand lines of SSL Certificate negotiation.
+        $pieces[0] = join("\n", array_filter(explode("\n", $pieces[0]), fn($x) => !str_starts_with($x,'*')));
 
-        $nicefy = function($x) { 
+        $nicefy = function(string $x) { 
             try { 
                 return json_encode(json_decode($x, true, 512, JSON_THROW_ON_ERROR), JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
-            } catch (JsonException) {
+            } catch (\Throwable) {
                 if (strlen($x) > 32*1024) { 
                     return substr($x, 0, 32*1024) . "\n...[response was truncated to save space]\n";
                 }
@@ -145,7 +161,7 @@ class HttpClient implements HttpClientInterface {
                 }
             }, $responses);
 
-            foreach ($this->client->stream($curlResponses, $timeout) as $response => $chunk) {
+            foreach ($this->getHttpClient()->stream($curlResponses, $timeout) as $response => $chunk) {
                 $responseId = array_search($response, $curlResponses);
                 $responses[$responseId]->recordStats();
                 
@@ -233,6 +249,6 @@ class HttpClient implements HttpClientInterface {
         if ($key) { 
             return static::$HTTP_STATS[$key];
         }
-        return static::$HTTP_STATS;
+        return array_filter(static::$HTTP_STATS);
     }
 }

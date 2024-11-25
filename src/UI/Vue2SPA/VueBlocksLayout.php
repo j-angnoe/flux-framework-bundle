@@ -215,7 +215,7 @@ class VueBlocksLayout implements LayoutInterface {
         return __DIR__ . '/../../../_layers';
     }
 
-    #[Route("/assets/_vue-harness/dist/{filename}")]
+    #[Route("/assets/_vue-harness/dist/{filename}", stateless: true)]
     function serve_dist(string $filename): BinaryFileResponse { 
         $path = static::getLayersDir() . '/vue-harness/dist/' . $filename;
 

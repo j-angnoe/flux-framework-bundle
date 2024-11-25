@@ -39,7 +39,7 @@ trait QuickSearchTrait {
         $fns = ['includes' => [], 'excludes' => []];
         foreach ($terms as $termCategory => $catTerms) {
             foreach ($catTerms as $termId => $t) { 
-                if (preg_match('~(?<field>\w+)(?<operator>[:!<>=]+)(?<test>.+)~', $t, $match)) { 
+                if (preg_match('~(?<field>\w+)(?<operator>[!<>=]+)(?<test>.+)~', $t, $match)) { 
                     $field = $match['field'];
                     $test = $match['test'];
                     $fns[$termCategory][] = match($match['operator']) {

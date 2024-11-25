@@ -18,8 +18,9 @@ class DecoratedResponse implements ResponseInterface {
 
         if ($response instanceof DecoratedResponse) { 
             throw new \LogicException('Double decorations occurs, please review your HttpClient class stack');
+        } else {
+            $this->logger->debug('http: > ' . $this->response->getInfo('http_method'). ' ' . $this->response->getInfo('url'));
         }
-        $this->logger->debug('http: > ' . $this->response->getInfo('effective_method'). ' ' . $this->response->getInfo('url'));
     }
 
     function getStatusCode(): int
@@ -50,6 +51,8 @@ class DecoratedResponse implements ResponseInterface {
         return $array;
     }
 
+
+
     function cancel(): void
     {
         $this->response->cancel();
@@ -72,7 +75,7 @@ class DecoratedResponse implements ResponseInterface {
         $delta['b_down'] = $i('size_download');
         $delta['b_up'] = $i('size_upload');
         $statusCode = intval($i('http_code') ?: 0);
-        $statusKey = 'http_' . $statusCode;
+        $statusKey = 'status.http_' . $statusCode;
         $delta[$statusKey] = 1;
         
         if (!$this->lastDelta) { 
@@ -136,16 +139,39 @@ class DecoratedResponse implements ResponseInterface {
         }
     }
 
-    function streamJson(?string ...$jsonPointer): \Traversable {
-        $parser = JsonParser::parse($this->stream());
-        foreach ($jsonPointer as $jp) {
-            $parser->pointer($jp);
-        };
-        return $parser;
-    }
 
     function __destruct() { 
         $this->recordStats();
+    }
+
+    function saveToFile(string $filename): void { 
+        $handle = fopen($filename, 'w');
+        foreach ($this->stream() as $chunk) { 
+            fputs($handle, $chunk);
+        }
+        fclose($handle);
+    }
+
+    private array $resultDecorators;
+
+    function setResultDecorator(\Closure $resultDecorator): static {
+        $this->resultDecorators = [];
+        return $this->addResultDecorator($resultDecorator);
+    }
+    function addResultDecorator(\Closure $resultDecorator): static {
+        $this->resultDecorators[] = $resultDecorator;
+        return $this;
+    }
+
+    function getResult(bool $throw = true): mixed { 
+        if (isset($this->resultDecorators)) { 
+            $result = [];
+            foreach ($this->resultDecorators as $cb) { 
+                $result = $cb($this, $result);
+            }
+            return $result;
+        }
+        return $this->toArray($throw);
     }
 }
 

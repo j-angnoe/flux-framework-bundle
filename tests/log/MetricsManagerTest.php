@@ -7,8 +7,6 @@ use PSB\Core\Http\PsbHttpClientInterface;
 use PSB\Core\Log\MetricsManager;
 use PSB\Core\Log\PsbLogger;
 use PSB\Core\Log\PsbLoggerInterface;
-use PSB\Core\Log\PsbNullLogger;
-use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 class MetricsManagerTest extends TestCase {
