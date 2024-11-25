@@ -23,7 +23,7 @@ class HttpClient implements HttpClientInterface {
         'b_up' => 0,
     ];
 
-    private HttpClientInterface|Closure|null $client;
+    protected HttpClientInterface|Closure|null $client;
 
     public function __construct(HttpClientInterface|Closure|null $client = null)
     {
@@ -149,10 +149,16 @@ class HttpClient implements HttpClientInterface {
 
     function stream(ResponseInterface|iterable $responses, ?float $timeout = null): ResponseStreamInterface
     {
+        $client = $this->getHttpClient();
+        if ($client instanceof HttpClient) {
+            return $client->stream($responses, $timeout);
+        }
+
         if (!is_array($responses)) { 
             $responses = [$responses];
         }
-        $generator = call_user_func(function () use ($responses, $timeout) { 
+
+        $generator = call_user_func(function () use ($responses, $timeout, $client) { 
             $curlResponses = array_map(function($resp) {
                 if ($resp instanceof DecoratedResponse) {
                     return $resp->getResponse();
@@ -161,7 +167,7 @@ class HttpClient implements HttpClientInterface {
                 }
             }, $responses);
 
-            foreach ($this->getHttpClient()->stream($curlResponses, $timeout) as $response => $chunk) {
+            foreach ($client->stream($curlResponses, $timeout) as $response => $chunk) {
                 $responseId = array_search($response, $curlResponses);
                 $responses[$responseId]->recordStats();
                 

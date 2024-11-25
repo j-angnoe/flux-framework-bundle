@@ -45,6 +45,7 @@
                             </slot>
                         </td>
                         <td style="width:100%;"></td>
+                        <td><slot name="actions" v-bind="{row: r}"></slot></td>
                     </tr>
                 </tbody>
             </table>

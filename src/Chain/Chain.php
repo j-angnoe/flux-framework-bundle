@@ -117,6 +117,10 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
 			// 	$position += 1;
 			// }
 			
+			if ($position === 0) { 
+				// empty file.
+				return;
+			}
 			do { 
 				// echo("read from $position - $chunkSize\n");
 				fseek($source, max(0, $position - $chunkSize ));
@@ -172,7 +176,9 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
 	 // @tests __construct(stream|resource)
 	 // @tests __construct(FluxFX\Chain) 
 	function __construct($source) {
-		if (is_resource($source)) { 
+		if ($source instanceof static) { 
+			$this->stats = $source->stats;
+		} else if (is_resource($source)) { 
 			$source = static::convertStream($source, $this);
 		} elseif ($source instanceof \Closure) {
 			$source = static::convertClosure($source, $this);
@@ -182,7 +188,7 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
 			$source = $source->result;
 		} elseif (!$source) {
 			$source = new EmptyIterator();
-		}
+		} 
 
 		// Final garantee, it must be iterable.
 		if (!is_iterable($source)) { 
@@ -1109,6 +1115,16 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
 
         return $this;
     }
+
+
+	/**
+	 * Its not memory efficient per se.
+	 */
+	function reverse() { 
+		return $this->apply(function($iterator) {
+			yield from array_reverse(iterator_to_array($iterator));
+		});
+	}
 }
 
 class LazyChain implements Chainable { 
@@ -1145,6 +1161,7 @@ class LazyChain implements Chainable {
 		// keep recording.
 		$this->calls[] = [$method, $args];
 	}
+
 
 	// Finish the lazy chain.
 	function getIterator() { 

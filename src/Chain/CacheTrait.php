@@ -173,7 +173,13 @@ trait CacheTrait {
 	}
 
 	function getCacheLineCount(): int {
-		return chain::countLines($this->cacheFileInUse);
+		if (isset($this->cacheFileInUse)) { 
+			return chain::countLines($this->cacheFileInUse);
+		} else if (isset($this->stats['file'])) {
+			return chain::countLines($this->stats['file']);
+		} else {
+			return -1;
+		}
 	}
 }
 

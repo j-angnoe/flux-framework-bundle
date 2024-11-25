@@ -60,6 +60,7 @@ class IoC implements ContainerInterface {
                 $resolvedArgs[$paramIdx] = $namedArgs[$requestedType];
                 continue;
             }
+            
             if (isset($this->services[$requestedType])) { 
                 if ($recursion > 10) { 
                     throw new \Exception('Max recursion occured here.');
