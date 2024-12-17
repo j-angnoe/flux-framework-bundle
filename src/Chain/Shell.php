@@ -2,6 +2,7 @@
 
 namespace Flux\Framework\Chain;
 
+use Flux\Framework\BackgroundPHP;
 use IteratorAggregate;
 use JsonSerializable;
 use Traversable;
@@ -193,7 +194,7 @@ class Shell implements \IteratorAggregate {
      */
     function getIterator(): Traversable { 
         
-        $command = join(" | \n", $this->commands);
+        $command = join(" | \\\n", $this->commands);
         if (!($this->pidfile ?? false)) { 
             $pidfile = $this->pidfile ?: tempnam(ensure_dir('/tmp/shells/'), 'pid-');
             $exitfile = $pidfile.'.exit';
@@ -322,6 +323,74 @@ class Shell implements \IteratorAggregate {
         }
 
         return new BackgroundCommand($token);
+    }
+
+    /**
+     * Allows you to map/transform data with a php function
+     * you supply as part of a pipe (as a separate process)
+     * 
+     * like cat data.txt | php -r '...' 
+     */
+    function pipeMap(\Closure $closure): static { 
+        [$transformer, $preamble] = BackgroundPHP::getClosureSource($closure);
+
+        [$stdin] = BackgroundPHP::getClosureSource(function($source) { 
+            $lastLine = '';
+			do { 
+				$chunk = fread($source, 8*1024);
+				
+				$lines = explode("\n", $lastLine . $chunk);
+				$lastLine = array_pop($lines);
+
+				yield from $lines;
+			} while (!feof($source));
+
+			if ($lastLine) {
+				yield $lastLine;
+			}
+        });
+
+        [$stdout] = BackgroundPHP::getClosureSource(function($result) {
+            if (!$result) {
+                return;
+            }
+            
+            if (is_scalar($result) && "$result">"") {
+                echo $result . PHP_EOL;
+            } elseif (is_array($result) || is_iterable($result)) {
+                if (is_array($result)) { 
+                    $keys = array_keys($result);
+                    $key = end($keys);
+                    if (!is_numeric($key)) { 
+                        echo json_encode($result, JSON_UNESCAPED_SLASHES) . PHP_EOL;
+                        return;
+                    }
+                }
+                foreach ($result as $row) {
+                    if ($row) { 
+                        echo json_encode($row, JSON_UNESCAPED_SLASHES) . PHP_EOL;
+                    }
+                }
+            } elseif (is_object($result)) { 
+                echo json_encode($result, JSON_UNESCAPED_SLASHES) . PHP_EOL;
+            } 
+        });
+
+        $php = $preamble . "\n" 
+            . '$transformer = '.$transformer . "\n"
+            . '$stdin = '.$stdin . "\n"
+            . '$stdout = '.$stdout . "\n"
+            . <<<'PHP'
+
+            foreach ($stdin(STDIN) as $line) { 
+                $result = $transformer($line);
+                if ($result !== null) { 
+                    $stdout($result);
+                }
+            }
+            PHP;
+        
+        return $this->pipe('php -r', $php);
     }
 }
 
