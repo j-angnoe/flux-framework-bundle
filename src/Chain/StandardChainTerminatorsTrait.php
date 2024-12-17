@@ -45,6 +45,11 @@ trait StandardChainTerminatorsTrait {
 		}
 	}
 
+	function firstValue(): mixed { 
+		$first = $this->first();
+		return firstval($this->first());
+	}
+
 	// @test toString()
 	// @test toString(custom separator)
 	// @test toString(trimming) - trims the final result.
