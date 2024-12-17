@@ -13,6 +13,7 @@ use Flux\Framework\Chain\CacheTrait;
 use Flux\Framework\Chain\StandardChainTerminatorsTrait;
 use GlobIterator;
 use NoRewindIterator;
+use SplFileObject;
 
 // Just an interface to define stuff as chainable.
 // Use this to as return type to indicate 
@@ -909,16 +910,59 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
 	}
 
 	function fromCsv(string $separator = ',', string $enclosure = '"', string $escape = '\\', bool $interpretFirstLineAsHeaders = true) { 
-		$this
-			->map(fn($line) => str_getcsv($line, $separator, $enclosure, $escape))
-		;
+		// auto detect
+		$this->apply(function($iterator) use ($separator, $enclosure, $escape) { 
+			$buffer = [];
+			$chars = [',' => [], ';' => [], "\t" => [],'|' => []];
+
+			foreach ($iterator as $i) { 
+				foreach ($chars as $c => $count) { 
+					$chars[$c][] = substr_count($i, $c);
+				}	
+				$buffer[] = $i;
+				if (count($buffer) > 50) { 
+					break; 
+				}
+			}
+
+			$chars = array_map('array_unique', $chars);
+			$candidates = array_filter($chars, function($i) { 
+				if (count($i) === 1 && reset($i) > 0) { 
+					return true;
+				}
+				return false;
+			});
+
+			uasort($candidates, function($a,$b) {
+				return count($a) <=> count($b);
+			});
+
+			$separator = array_key_first($candidates);			
+
+			foreach ($buffer as $b) { 
+				yield str_getcsv($b, $separator, $enclosure, $escape);
+			}
+			if ($iterator->valid()) { 
+				foreach (new NoRewindIterator($iterator) as $i) { 
+					yield str_getcsv($i, $separator, $enclosure, $escape);
+				}
+			}
+		});
+
+		// $this->buffer(50);
+
+		// $this
+		// 	->map(fn($line) => str_getcsv($line, $separator, $enclosure, $escape))
+		// ;
 
 		if ($interpretFirstLineAsHeaders) { 
 			return $this->apply(function($iterator) { 
 				$headers = $iterator->current();
 				$iterator->next();
-				foreach (new \NoRewindIterator($iterator) as $line) {
-					yield array_combine($headers, $line);
+				if ($iterator->valid()) { 
+					foreach (new \NoRewindIterator($iterator) as $line) {
+						yield array_combine($headers, $line);
+					}
 				}
 			});
 		}
