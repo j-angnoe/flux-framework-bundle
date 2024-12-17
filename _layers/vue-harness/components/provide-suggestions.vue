@@ -239,6 +239,9 @@ export default {
             this.search.value = this.displayItem(this.$attrs['display-value']);
         } else if (this.$attrs['value']) {
             this.performSearch(this.$attrs['value'], results => {
+                if (~results.indexOf(this.$attrs['value'])) { 
+                    results = [this.$attrs['value']];
+                }
                 if (results && results[0]) {
                     this.search.value = this.displayItem(results[0]);
                 }
