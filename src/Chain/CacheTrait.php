@@ -168,19 +168,31 @@ trait CacheTrait {
         return $this;
     }
 
-	function getCacheFile(): string { 
-		return $this->cacheFileInUse;
-	}
-
-	function getCacheLineCount(): int {
+	function getCacheFile(): ?string {
 		if (isset($this->cacheFileInUse)) { 
-			return chain::countLines($this->cacheFileInUse);
+			return $this->cacheFileInUse;
 		} else if (isset($this->stats['file'])) {
-			return chain::countLines($this->stats['file']);
+			return $this->stats['file'];
 		} else {
-			return -1;
+			return null;
 		}
 	}
+	function getCacheLineCount(): int {
+		$file = $this->getCacheFile();
+		if ($file) { 
+			return chain::countLines($file);
+		}
+		return -1;
+	}
+	function reread(): static { 
+		$file = $this->getCacheFile();
+		if ($file) { 
+			return static::cat($file)->fromJsonlines();
+		} else {
+			return $this;
+		}
+	}
+
 }
 
 
