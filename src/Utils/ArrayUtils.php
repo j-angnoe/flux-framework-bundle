@@ -132,7 +132,7 @@ class ArrayUtils {
             }
         } else if (is_array($array)) { 
             foreach ($array as $key=>$value) { 
-                if (is_scalar($value)) { 
+                if (!$value || is_scalar($value)) { 
                     $fullKey = join('.', array_merge($path, [$key]));
                     $callback($array, $key, $value, $fullKey);
                 } else { 

@@ -94,7 +94,7 @@ class HttpClient implements HttpClientInterface {
         if ($response instanceof DecoratedResponse) { 
             return $response->getInfo('debug');
         }
-        $debugInfo = $response->getInfo('debug');
+        $debugInfo = $response->getInfo('debug') ?: '';
 
         $pieces = preg_split("~(\r*\n){2}~", $debugInfo);
         if (count($pieces) < 2) { 

@@ -101,7 +101,7 @@ class DecoratedResponse implements ResponseInterface {
 
 
     function debug() { 
-        dd($this->getInfo('debug'));
+        dd($this->getInfo('debug') . PHP_EOL . '(dd called in ' . __CLASS__ . ' on line ' . __LINE__ .')');
     }
 
     /**
