@@ -12,7 +12,8 @@ class DataBrowser implements JsonSerializable {
         private string|array $name, 
         private \Closure|\Traversable $datasource,
         private bool $cache = true,
-        private ?array $previewOptions = null
+        private ?array $previewOptions = null,
+        private \Closure|null $summary = null 
     ) { 
     }
 
@@ -31,7 +32,18 @@ class DataBrowser implements JsonSerializable {
         }
         
         if ($previewOptions['search'] ?? false) { 
-            $datasource->quicksearch($previewOptions['search']);
+            if (str_starts_with($previewOptions['search'],'label:')) {
+                $datasource->filter(function($row) use ($previewOptions) { 
+                    foreach (($this->summary)($row) as $x => $y) { 
+                        if ($x === $previewOptions['search'] && $y) { 
+                            return true;
+                        }
+                    }
+                    return false;
+                });
+            } else { 
+                $datasource->quicksearch($previewOptions['search']);
+            }
             if ($previewOptions['size'] !== 'all' || $previewOptions['size'] < 250) {
                 $previewOptions['size'] = 250;
             }
@@ -82,13 +94,37 @@ class DataBrowser implements JsonSerializable {
         $this->previewOptions = $previewOptions;
     }
 
-    function jsonSerialize() {
+    function jsonSerialize(): mixed {
         return $this->render($this->previewOptions);
     }
 
     function render(?array $previewOptions = null): StreamedJsonResponse {
         $previewOptions['mode'] ??= null;
         
+        if ($previewOptions['summary'] ?? false) { 
+            if (!$this->summary) {
+                return new StreamedJsonResponse(['summary' => null]);
+            }
+            $datasource = $this->getData($previewOptions + ['size' => 'all']);
+            $datasource->apply(function($iterator) {
+                $carry = [];
+                foreach ($iterator as $i) {
+                    foreach (($this->summary)($i) as $key=>$value) { 
+                        if (is_numeric($value)) { 
+                            $carry[$key] ??= 0;
+                            $carry[$key] += $value;
+                            ;
+                        } else {
+                            $carry[$value] ??= 0;
+                            $carry[$value] += 1;
+                        }
+                    }
+                }
+                ksort($carry);
+                yield array_map(fn($x) => round($x, 2), $carry);
+            });
+            return new StreamedJsonResponse(['summary' => $datasource->first()]);
+        }
         $datasource = $this->getData($previewOptions);
 
         if ($previewOptions['mode']) { 

@@ -164,7 +164,7 @@
     <div style="display:flex; gap: 0.5em;">
         <div style="line-height: 1.75rem;" v-if="$attrs.title"><b>{{$attrs.title}}</b></div>
         <div v-if="typeof loader === 'function'" style="display:flex; gap: 0.5em;">
-            <div class="input-group" style="max-width: 200px;">
+            <div class="input-group" style="min-width: 100px; max-width: 200px;">
                 <input 
                     v-model="quicksearch" 
                     class="form-control form-control-sm quicksearch"
@@ -193,6 +193,15 @@
                     &gt;
                 </div>
             </div>
+
+            <div :title="json(summary)" class="d-flex" style="flex:1;">
+                <div v-for="item in summaryView" >
+                    <status-badge 
+                        :name="item.key.replace('label:','')" :volume="item.value"
+                        @click="item.key.startsWith('label:') ? performSearch(item.key) : ''"
+                    ></status-badge>
+                </div>
+            </div>
         </div>
         <div class="form-text">
             <slot name="query" v-bind="{ addQuery }"></slot>
@@ -219,9 +228,29 @@
         total_records = -1;
         loading = false;
         skip = 0;
-
+        summary = null;
         lastPreviewOptions = null;
 
+        computed = {
+            summaryView() {
+                return Object.entries(this.summary || {})
+                    .map(([key, value]) => {
+                        var score = (key.startsWith('label:') ? 10000 : 1)
+                            + (key.match(/err(or)?|fail|not/) ? 5000 : 1)
+                        ;
+
+                        score = score * Math.sqrt(value);
+                        score = score / Math.sqrt(key.length);
+                        score = score / Math.pow(10, key.split('.').length);
+
+                        return {key, value, score}
+                    })
+                    .sort((a, b) => {
+                        return b.score - a.score
+                    })
+                    .slice(0, 5);
+            }
+        }
         watch = {
             previewOptions(newValue) {
                 var oldValue = this.lastPreviewOptions;
@@ -245,6 +274,10 @@
                         size: this.size || null
                     }
                 });
+                this.loader({ summary: 1 }).then(data => {
+                    this.summary = data.summary;
+                })
+
             }
             this.getResultsFromLoader(data);
             this.loading = false;
@@ -268,6 +301,7 @@
         }
         async performSearch(search, refreshCache = false, otherOptions = {}) { 
             this.loading = true;
+            this.quicksearch = search;
             try { 
                 await this.getResultsFromLoader(this.loader({ 
                     size: this.size || null, 
