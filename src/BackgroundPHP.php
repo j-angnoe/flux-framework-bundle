@@ -53,7 +53,7 @@ class BackgroundPHP {
         }
             
         $body[count($body)-1] = strstr($body[count($body)-1],'}',true)."\n".'};';
-        $str = $str . join("\n", $body);
+        $str = $str . join("", $body);
 
         return [$str, $uses];
     }
