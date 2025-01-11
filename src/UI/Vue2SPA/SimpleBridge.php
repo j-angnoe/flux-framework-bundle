@@ -14,6 +14,11 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 class SimpleBridge implements ServerBridgeInterface { 
     private mixed $requestData;
     private object $controller;
+    private IoC $ioc;
+
+    public function setIoC($ioc) { 
+        $this->ioc = $ioc;
+    }
 
     public function setController(object $controller): void
     {
@@ -21,7 +26,7 @@ class SimpleBridge implements ServerBridgeInterface {
     }
 
     private function isEventStreamRequest($request): bool { 
-        return str_contains($request->headers->get('accept'),'text/event-stream');
+        return str_contains($request->headers->get('accept') ?: '','text/event-stream');
     }
     public function isDispatchRequest(Request $request): bool
     {
@@ -29,6 +34,7 @@ class SimpleBridge implements ServerBridgeInterface {
             if ($request->getContentTypeFormat() === 'json') {
                 $this->requestData = json_decode($request->getContent(), true);
             }    
+
             return isset($this->requestData['rpc']);
         } else if ($this->isEventStreamRequest($request)) {
             $this->requestData['rpc'] = json_decode($request->query->get('rpc'), true);
@@ -70,7 +76,8 @@ class SimpleBridge implements ServerBridgeInterface {
         $result = null;
 
         try {
-            $ioc = new IoC;
+            $ioc = $this->ioc->clone();
+            
             foreach ($this->argumentResolvers as $x=>$y) {
                 $ioc->set($x,$y);
             }
@@ -110,8 +117,8 @@ class SimpleBridge implements ServerBridgeInterface {
         return $result;
     }
 
-    function generateJavascriptClientXhr() { 
-        $currentUrl = json_encode($_SERVER['REQUEST_URI']);
+    function generateJavascriptClientXhr(Request $request) { 
+        $currentUrl = json_encode($request->getUri());
         return <<<HTML
         <script>
             if (!createSimpleBridge)  {
@@ -121,7 +128,7 @@ class SimpleBridge implements ServerBridgeInterface {
         </script>
         HTML;
     }
-    function generateJavascriptClient(): string
+    function generateJavascriptClient(Request $request): string
     {        
         return str_replace('RELEASE_ID', urlencode($_ENV['APP_RELEASE_ID'] ?? ''), <<<'HTML'
         <script>

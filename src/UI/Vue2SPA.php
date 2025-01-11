@@ -10,7 +10,9 @@ use Flux\Framework\UI\LayoutInterface;
 use Flux\Framework\UI\Vue2SPA\ServerBridgeInterface;
 use Flux\Framework\UI\Vue2SPA\SimpleBridge;
 use Flux\Framework\UI\Vue2SPA\VueBlocksLayout;
+use Flux\Framework\Utils\IoC;
 use Symfony\Component\HttpKernel\EventListener\AbstractSessionListener;
+use Symfony\Contracts\Service\Attribute\Required;
 
 class Vue2SPA
 {
@@ -22,6 +24,7 @@ class Vue2SPA
 
     private array $spaFiles = [];
     private array $spaFilesNonXhr = [];
+    private IoC $ioc;
 
     static $defaultLayouts = [
         VueBlocksLayout::class
@@ -30,6 +33,12 @@ class Vue2SPA
     public function __construct(ServerBridgeInterface|LayoutInterface ...$elements) { 
         $this->setup(...$elements);
     }
+
+    #[Required]
+    public function setIoC(IoC $ioc) { 
+        $this->ioc = $ioc;
+    }
+
     public function setup(ServerBridgeInterface|LayoutInterface ...$elements) { 
         $bridge = null;
         $layouts = [];
@@ -130,6 +139,9 @@ class Vue2SPA
         
         $bridge = $this->bridge ?? new static::$defaultBridge();
 
+        if (method_exists($bridge, 'setIoC')) { 
+            $bridge->setIoC($this->ioc ?? new IoC);
+        }
         $bridge->setController($controller);
         if (method_exists($bridge, 'setArgumentResolvers')) { 
             $bridge->setArgumentResolvers($this->argumentResolvers);
@@ -157,9 +169,9 @@ class Vue2SPA
         }
 
         if ($request->isXmlHttpRequest() && method_exists($bridge, 'generateJavascriptClientXhr')) {
-            $content .= $bridge->generateJavascriptClientXhr();
+            $content .= $bridge->generateJavascriptClientXhr($request);
         } else { 
-            $content .= $bridge->generateJavascriptClient();
+            $content .= $bridge->generateJavascriptClient($request);
         }
         if (!$request->isXmlHttpRequest()) { 
             foreach ($this->layouts as $layout) { 
@@ -177,7 +189,7 @@ class Vue2SPA
             }
         }
 
-        $content = HtmlUtils::prepend('head','<base href="'.$_SERVER['REQUEST_URI'].'">', $content);
+        $content = HtmlUtils::prepend('head','<base href="'.$request->getPathInfo().'">', $content);
         
         $response = new Response($content, 200, ['Content-type' => 'text/html']);
 

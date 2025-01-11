@@ -13,6 +13,12 @@ class IoC implements ContainerInterface {
     {
         return $this->services[$id];
     }   
+
+    function clone(): static { 
+        $clone = clone($this);
+        return $clone;
+    }
+
     function has(string $id): bool
     {
         return isset($this->services[$id]);
@@ -24,6 +30,10 @@ class IoC implements ContainerInterface {
             return;
         }
         $this->services[$id] = fn() => $serviceOrFactory;
+    }
+
+    function registerDecorator($decoratorClass, $decorateeClass) { 
+        $this->services[$decoratorClass] = eval('return fn('.$decorateeClass.' $x) => new '.$decoratorClass.'($x);'); 
     }
 
     public function call(callable $function, $positionalArgs = [], $namedArgs = []): mixed { 
@@ -45,6 +55,7 @@ class IoC implements ContainerInterface {
         } else { 
             $refl = new ReflectionFunction($function);
         }
+
         $resolvedArgs = [];
         foreach ($refl->getParameters() as $paramIdx => $param) { 
             $paramName = '$'.$param->getName();

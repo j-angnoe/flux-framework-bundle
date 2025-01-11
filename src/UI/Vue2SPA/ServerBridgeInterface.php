@@ -10,5 +10,5 @@ interface ServerBridgeInterface {
     public function setController(object $controller): void;
     public function isDispatchRequest(Request $request): bool;
     public function dispatch(Request $request): Response;
-    public function generateJavascriptClient(): string;
+    public function generateJavascriptClient(Request $request): string;
 }
