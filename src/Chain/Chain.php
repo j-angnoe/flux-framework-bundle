@@ -403,13 +403,18 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
 			$count = -1;
 			foreach ($result as $key => $value) {
 				$count = -1; 
-				foreach ($fn($value, $key) as $key => $row) {
-					$count++;
-					if (is_int($key) && $key === $count) { 
-						yield $row;
-					} else {
-						yield $key => $row;
+				$result = $fn($value, $key);
+				if (is_iterable($result)) { 
+					foreach ($result as $key => $row) {
+						$count++;
+						if (is_int($key) && $key === $count) { 
+							yield $row;
+						} else {
+							yield $key => $row;
+						}
 					}
+				} elseif ($result) { 
+					throw new \Exception('Chain::each(cb) returns a non-iterable result, this is unsupported.');
 				}
 			}
 		}, $this->result);
@@ -909,7 +914,7 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
 		return new LazyChain($args, static::class);
 	}
 
-	function fromCsv(string $separator = ',', string $enclosure = '"', string $escape = '\\', bool $interpretFirstLineAsHeaders = true) { 
+	function fromCsv(string $separator = ',', string $enclosure = '"', string $escape = '\\', bool $interpretFirstLineAsHeaders = true): static { 
 		// auto detect
 		$this->apply(function($iterator) use ($separator, $enclosure, $escape) { 
 			$buffer = [];
@@ -940,11 +945,12 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
 			$separator = array_key_first($candidates);			
 
 			foreach ($buffer as $b) { 
-				yield str_getcsv($b, $separator, $enclosure, $escape);
+				
+				yield !$separator ? $b : str_getcsv($b, $separator, $enclosure, $escape);
 			}
 			if ($iterator->valid()) { 
 				foreach (new NoRewindIterator($iterator) as $i) { 
-					yield str_getcsv($i, $separator, $enclosure, $escape);
+					yield !$separator ? $i : str_getcsv($i, $separator, $enclosure, $escape);
 				}
 			}
 		});
@@ -965,6 +971,8 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
 					}
 				}
 			});
+		} else {
+			return $this;
 		}
 	}
 
@@ -1038,15 +1046,19 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
         $nestingKeys = is_array($nestingKeys) ? $nestingKeys : array_filter([$nestingKeys]);
 		
 		foreach ($this->getIterator() as $e) {
-			$e = (array)$e;
-			$ref = &$result;
-			foreach ($nestingKeys as $s) {
-				$ref = &$ref[$e[$s]];
-			}
-			if ($value !== null) {
-				$ref = $e[$value] ?? null;
-			} else {
-				$ref[] = $e;
+			try { 
+				$e = (array)$e;
+				$ref = &$result;
+				foreach ($nestingKeys as $s) {
+					$ref = &$ref[$e[$s]];
+				}
+				if ($value !== null) {
+					$ref = $e[$value] ?? null;
+				} else {
+					$ref[] = $e;
+				}
+			} catch (\Exception $ex) { 
+				throw new \Exception($ex->GetMessage() . "\nLast item: " . print_r($e, true));
 			}
 		}
 		return $result;
