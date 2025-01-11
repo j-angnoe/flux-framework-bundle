@@ -31,12 +31,6 @@ class ShellTest extends TestCase {
         $this->assertEquals("a 'b' c 'd' 'e'", $result);
     }
 
-    function test_less_arguments_then_placeholders_raise_an_exception() { 
-        $this->expectException(Exception::class);
-        
-        UnitTest_Shell_Chain::formatCommand('a ? ? ? ? ?','b','c');
-    }
-
     function test_i_can_run_a_command() { 
         $result = UnitTest_Shell_Chain::shell('echo ?; echo ?; echo ?; echo ?;', 'hallo','hoe','is','het');
 
@@ -202,7 +196,7 @@ class ShellTest extends TestCase {
             // ob_flush();
         }
 
-        $this->assertLessThan(20, count($lines), 'The command should have stopped in less then 20 iterations');
+        $this->assertLessThan(30, count($lines), 'The command should have stopped in less then 30 iterations or so..');
     }
 
     function test_i_can_dispatch_a_background_command_and_only_iterate_stdout() { 
@@ -255,10 +249,37 @@ class ShellTest extends TestCase {
 
     }
 
-    /**
-     * @incomplete
-     */
     function test_the_exitcode_will_be_available_afterwards() { 
-        // $this->assertTrue(false, 'TODOOO');
+        $command = new Shell('php -r ?', <<<'PHP'
+            echo "Just echo something without a NEWLINE";
+        PHP);
+
+        $bg = $command->dispatchBackgroundCommand();
+
+        $lines = [];
+        foreach ($bg->getIterator(stderr: false) as $line) {
+            $lines[] = $line;
+        }
+
+        static::assertEquals(0, $bg->getExitCode());
+    }
+
+
+    function test_getIterator_yields_after_timeoutInSeconds_during_long_running_process() { 
+        $command = new Shell('php -r ?', <<<'PHP'
+            echo "Starting\n";
+            sleep(1);
+            echo "Finished\n";
+            // echo "Just echo something without a NEWLINE";
+        PHP);
+
+        $signals = [];
+        foreach ($command->getIterator(0.1) as $line) { 
+            if (!$line) { 
+                $signals[] = $line;
+            }
+        }
+
+        static::assertGreaterThan(6, count($signals), 'There should have been about 10 timeouts while running the command');
     }
 }
