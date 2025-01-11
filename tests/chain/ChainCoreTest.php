@@ -217,6 +217,7 @@ class ChainCoreTest extends TestCase {
 
         # each(non-generator) - does not work.
 
+        $this->expectException(\Exception::class);
         $result = chain([1,2,3])
             ->each(function($value) {
                 return $value*2;

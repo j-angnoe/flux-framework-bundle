@@ -31,7 +31,9 @@ class DuckDB {
             default => throw new \Exception('Unknown mode `'.$mode.'`')
         };
 
-        $command = new Shell('cd ?; duckdb ? %s -c ? ', dirname(realpath($this->dbFile)) ?: '', $this->dbFile ?: '', $mode, $sql);
+        $path = $this->dbFile ? dirname($this->dbFile) : '/tmp';
+
+        $command = new Shell('cd ?; duckdb ? %s -c ? ', $path, $this->dbFile ?: '', $mode, $sql);
         return (new Chain(fn() => yield from $command->getIterator()))->$fromFn();
     }
 }   
