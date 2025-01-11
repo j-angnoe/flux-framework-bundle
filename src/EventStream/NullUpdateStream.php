@@ -14,9 +14,13 @@ class NullUpdateStream implements UpdateStream {
 
     }
 
+    function endOfStream(): bool { 
+        return true;
+    }
+
     function nextUpdate(mixed $lastPosition): mixed
     {
-        return 1;
+        return null;
     }
 
     function channelName(): string

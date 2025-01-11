@@ -44,7 +44,7 @@ class EventStreamServiceTest extends TestCase
         $headers = [];
         $request = Request::create('/whatever', 'GET', [], [], [], $headers);
         $eventStreamService = new EventStreamService($request);
-        $eventStreamService->start();
+        $eventStreamService->start(exit: false);
     }
 
     /**
@@ -183,10 +183,11 @@ class EventStreamServiceTest extends TestCase
         ];
         $request = Request::create('/whatever', 'GET', [], [], [], $headers);
         
+        ob_start();
         $eventStreamService = new EventStreamService($request);
         $eventStreamService->register(new NullUpdateStream());
-        ob_start();
-        $eventStreamService->start();
+        $eventStreamService->start(exit: false);
+
         ob_end_clean();
 
         $this->assertEquals('S1_P101', $eventStreamService->getStreamOffset(0));
