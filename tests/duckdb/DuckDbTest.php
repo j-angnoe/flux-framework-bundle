@@ -5,6 +5,14 @@ use Flux\Framework\DuckDB\DuckDB;
 use PHPUnit\Framework\TestCase;
 
 class DuckDbTest extends TestCase {
+    public static function setUpBeforeClass(): void
+    {
+        $duckDbBinaryExists = shell_exec('which duckdb');
+
+        if (!$duckDbBinaryExists) { 
+            self::markTestSkipped('DuckDbTests are skipped because `duckdb` binary is not available.');
+        }
+    }
     /**
      * @test
      */

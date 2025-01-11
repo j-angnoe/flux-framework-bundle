@@ -114,6 +114,23 @@ class BackgroundCommand implements \IteratorAggregate, \JsonSerializable {
         return ['backgroundCommandId' => $this->token];
     }
 
+    function getExitCode(): int { 
+        $exitFile = static::TMP_DIR . '/' . $this->token.'/exitcode.txt';
+
+        for($i=0;$i<100;$i++) {
+            if (file_exists($exitFile)) { 
+                break;
+            }
+            usleep(10 * 1000);
+        }
+
+        if (!file_exists($exitFile)) { 
+            throw new \Exception('no exitcode available (yet).');
+        }
+
+        return intval(file_get_contents($exitFile));
+    }
+
     function simpleEventStream(?\Closure $callback = null) { 
         // End whatever sessions are left.
         if (session_status() === PHP_SESSION_ACTIVE) { 

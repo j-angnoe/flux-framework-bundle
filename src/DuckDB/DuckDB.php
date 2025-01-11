@@ -49,7 +49,9 @@ class DuckDB {
         
         $sql = $sqlPrefix . "\n" . $sql;
 
-        return new Shell('cd ?; duckdb ? %s -c ? ', dirname(realpath($this->dbFile)) ?: '', $this->dbFile ?: '', $duckMode, $sql);
+        $path = $this->dbFile ? dirname($this->dbFile) : '/tmp';
+
+        return new Shell('cd ?; duckdb ? %s -c ? ', $path, $this->dbFile ?: '', $duckMode, $sql);
     }
 
     function query(string $sql, $mode = 'json'): Chain  {
@@ -62,5 +64,8 @@ class DuckDB {
         $shell = $this->exec($sql, $mode);
 
         return (new Chain(fn() => yield from $shell->getIterator()))->$fromFn();
+
+        $command = new Shell('cd ?; duckdb ? %s -c ? ', $path, $this->dbFile ?: '', $mode, $sql);
+        return (new Chain(fn() => yield from $command->getIterator()))->$fromFn();
     }
 }   
