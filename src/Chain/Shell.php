@@ -294,10 +294,16 @@ class Shell implements \IteratorAggregate {
         foreach (static::readFromManyHandles($pipes, $runWhile, $streamPositions, $timeoutInSeconds) as $stream => $line) { 
             // fputs(STDERR, 'Receive `'.$line.'` on `'.$stream.'` from many handles' . "\n");
 
-            $content = ($outputPrefixes[$stream] ?? '') . $line;
+            if ($line > '') { 
+                $content = ($outputPrefixes[$stream] ?? '') . $line;
+                $lastContent[] = $content;
+            } else {
+                $content = $line;
+            }
+
             yield $content;
-            $lastContent[] = $content;
-            if (count($lastContent) > 200) { 
+
+            if (count($lastContent) > 100) { 
                 array_shift($lastContent);
             }
         }
@@ -318,6 +324,32 @@ class Shell implements \IteratorAggregate {
         }
     }
 
+    /**
+     * Yields a buffer 
+     */
+    function whileRunning($tickRatePerSecond = 3, bool $yieldBuffer = false) { 
+        $timeout = 1 / $tickRatePerSecond;
+        $lastYield = microtime(true);
+        
+        $buffer = null;
+
+        foreach ($this->getIterator($timeout) as $line) { 
+            $now = microtime(true);
+
+            if ($yieldBuffer && $line > '') { 
+                $buffer[] = $line;
+            }
+
+            if (($now - $lastYield) >= $timeout) { 
+                $lastYield = $now;
+                yield $buffer;
+                $buffer = null;
+            }
+        }
+        if ($buffer) { 
+            yield $buffer;
+        }
+    }
     /**
      * Dispatch the command and get a Token back.
      */

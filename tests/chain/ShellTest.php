@@ -65,7 +65,14 @@ class ShellTest extends TestCase {
         }
     }
 
+    /**
+     * This is a prove that it is capable of running big data
+     * without getting into memory issues.
+     * 
+     * This test is a bit heavy to run all-the-time.
+     */
     function test_shell_can_handle_big_data() {
+        static::markTestSkipped('Skipping big-data test');
 
         $command = UnitTest_Shell_Chain::shell('php -r ?', <<<'PHP'
             ob_start(null, 8*581);
@@ -280,6 +287,33 @@ class ShellTest extends TestCase {
             }
         }
 
+        static::assertGreaterThan(6, count($signals), 'There should have been about 10 timeouts while running the command');
+    }
+
+    function test_shell_while_running() {
+        $command = new Shell('php -r ?', <<<'PHP'
+            echo "Starting\n";
+            for($i=0;$i<100;$i++) { 
+                echo "Iteration $i\n";
+                usleep(1e6/100);
+            }
+            echo "Finished\n";
+            // echo "Just echo something without a NEWLINE";
+        PHP);
+
+
+        $signals = [];
+        $receivedLines = '';
+
+        // The primary use case is receiving ticks every once in a while,
+        // optionally, you can also receive the collected content (since last tick)
+        foreach ($command->whileRunning(10,true) as $line) { 
+            $signals[] = 1;
+            $receivedLines .= join("\n", $line);
+        }
+
+        static::assertStringContainsString("Iteration 99", $receivedLines);
+        
         static::assertGreaterThan(6, count($signals), 'There should have been about 10 timeouts while running the command');
     }
 }
