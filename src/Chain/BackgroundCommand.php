@@ -56,11 +56,16 @@ class BackgroundCommand implements \IteratorAggregate, \JsonSerializable {
         }
     }
 
+    function whileRunning($tickRatePerSecond = 3) { 
+        while($this->isStillRunning()) {
+            yield null;
+            usleep(1e6 / $tickRatePerSecond);
+        }
+    }
+
     private array $streamPositions = [];
 
     function getIterator($stderr = true, $stdout = true, array|string|null $positions = null): \Traversable {
-
-
         $handles = array_filter([
             'stdout' => $stdout ? fopen(static::TMP_DIR . $this->token . '/stdout.txt','r') : false,
             'stderr' => $stderr ? fopen(static::TMP_DIR . $this->token . '/stderr.txt','r') : false,

@@ -122,7 +122,7 @@ class Shell implements \IteratorAggregate {
      * 
      * Will yield [line, stream-position]
      */
-    static function readFromManyHandles($handles, ?\Closure $runWhile = null, &$positions = null) {
+    static function readFromManyHandles($handles, ?\Closure $runWhile = null, &$positions = null, ?float $timeoutInSeconds = null) {
         $noContentTimeout = 10.0;
 
         $runWhile ??= function () use (&$handles) {
@@ -146,17 +146,30 @@ class Shell implements \IteratorAggregate {
             }
         };
 
+
         // Load initial positions for all handles.
         foreach ($handles as $handleId => $handle) { 
             $positions[$handleId] = ftell($handle);
+            if ($timeoutInSeconds > 0) { 
+                stream_set_timeout($handle, floor($timeoutInSeconds), ($timeoutInSeconds-floor($timeoutInSeconds))*1e6);
+            }
         }
+
+        $lastYieldTime = microtime(true);
+
         do { 
             $contentThisCycle = 0;
             
             foreach ($handles as $handleId => $handle) { 
                 $lastLines[$handleId] ??= '';
                 while(false !== ($chunk = fread($handle, 8*1024))) {             
+                    
                     if ($chunk === '') {
+                        $timeSinceLastYield = microtime(true) - $lastYieldTime;
+                        if ($timeoutInSeconds && $timeSinceLastYield > $timeoutInSeconds) { 
+                            $lastYieldTime = microtime(true);
+                            yield null;
+                        }
                         break;
                     }
                     $contentThisCycle += strlen($contentThisCycle);
@@ -166,15 +179,20 @@ class Shell implements \IteratorAggregate {
                     $lastLines[$handleId] = array_pop($lines);
 
                     // fputs(STDERR, 'yield lines ' . count($lines) . PHP_EOL);
+                    // fputs(STDERR, 'keeping lastline: ' . $lastLines[$handleId] . PHP_EOL);
                     foreach($lines as $l) {
                         $positions[$handleId] += strlen($l) + 1;
+
+                        // fputs(STDERR, 'yield line `'.$l.'`' . PHP_EOL);
+                        $lastYieldTime = microtime(true);
                         yield $handleId => $l;
                     }
                 }
             }     
 
             if ($contentThisCycle === 0) {
-                yield from $flushLastLines();
+                // DONT FLUSH, you risk flushing an unfinished line.
+                // yield from $flushLastLines();
 
                 $noContentTimeout = round(($noContentTimeout ?: 10) * 1.05);
                 // fputs(STDERR, 'timing out ' . $noContentTimeout . "\n");
@@ -192,7 +210,7 @@ class Shell implements \IteratorAggregate {
     /**
      * a simplified shell runner, more in tune to what we usually use it for.
      */
-    function getIterator(): Traversable { 
+    function getIterator(?float $timeoutInSeconds = null): Traversable { 
         
         $command = join(" | \\\n", $this->commands);
         if (!($this->pidfile ?? false)) { 
@@ -273,13 +291,13 @@ class Shell implements \IteratorAggregate {
         
         $streamPositions = [];
         // fputs(STDERR, 'Start reading from many handles' . "\n");
-        foreach (static::readFromManyHandles($pipes, $runWhile, $streamPositions) as $stream => $line) { 
+        foreach (static::readFromManyHandles($pipes, $runWhile, $streamPositions, $timeoutInSeconds) as $stream => $line) { 
             // fputs(STDERR, 'Receive `'.$line.'` on `'.$stream.'` from many handles' . "\n");
 
             $content = ($outputPrefixes[$stream] ?? '') . $line;
             yield $content;
             $lastContent[] = $content;
-            if (count($lastContent) > 100) { 
+            if (count($lastContent) > 200) { 
                 array_shift($lastContent);
             }
         }
@@ -315,7 +333,6 @@ class Shell implements \IteratorAggregate {
         $this->redirectStdout("$dir/stdout.txt");
         $this->redirectStderr("$dir/stderr.txt");
         $this->enablePidFile("$dir/pid.txt");
-
         $this->setRuntime(1);
 
         foreach ($this->getIterator() as $i) {

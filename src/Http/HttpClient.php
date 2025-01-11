@@ -171,7 +171,7 @@ class HttpClient implements HttpClientInterface {
                 $responseId = array_search($response, $curlResponses);
                 $responses[$responseId]->recordStats();
                 
-                yield $response => $chunk;
+                yield $responses[$responseId] => $chunk;
             }
         });
 
@@ -209,11 +209,14 @@ class HttpClient implements HttpClientInterface {
 
         foreach ($this->stream($responses) as $response => $chunk) { 
             if ($chunk->isTimeout()) {
-                return;
+                continue;
             }
 
             $responseId = array_search($response, $responses);
-
+            
+            if (!is_numeric($responseId)) { 
+                throw new \Exception('ResponseId is false.');
+            }
             // Read the line or chunk of data from the response
             $content = $chunk->getContent();
 
