@@ -193,21 +193,23 @@ if (!function_exists('makeNested')) {
     }
 }
 
-function create_map(iterable $data, string $keysField, string|\Closure|null $valueField): array { 
-    $result = [];
-    foreach ($data as $row) { 
-        
-        if ($valueField instanceof \Closure) { 
-            $value = $valueField($row);
-        } else if ($valueField) {
-            $value = $row[$valueField] ?? null;
-        } else {
-            $value = $row;
-        }
+if (!function_exists('create_map')) {
+    function create_map(iterable $data, string $keysField, string|\Closure|null $valueField): array { 
+        $result = [];
+        foreach ($data as $row) { 
+            
+            if ($valueField instanceof \Closure) { 
+                $value = $valueField($row);
+            } else if ($valueField) {
+                $value = $row[$valueField] ?? null;
+            } else {
+                $value = $row;
+            }
 
-        $result[$row[$keysField] ?? '(null)'] = $value;
+            $result[$row[$keysField] ?? '(null)'] = $value;
+        }
+        return $result;
     }
-    return $result;
 }
 
 /** 
