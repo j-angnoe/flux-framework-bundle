@@ -58,7 +58,7 @@ class BackgroundPHP {
         return [$str, $uses];
     }
 
-    private function getPreamble() { 
+    private function getPreamble(): string|null { 
         if ($this->preamble ?? false) {
             return $this->preamble;
         }

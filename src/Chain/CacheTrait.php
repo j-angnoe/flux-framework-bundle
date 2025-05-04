@@ -150,7 +150,7 @@ trait CacheTrait {
 
 			// var_dump($jsonlines);
 
-			error_Log('Writing to '. $options['file']);
+			// error_Log('Writing to '. $options['file']);
 			
 			fflush($handle);
 			// Als alles succesvol was, dan pas wegschrijven.

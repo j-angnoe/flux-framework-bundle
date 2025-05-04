@@ -1,277 +1,219 @@
 <?php
 
-use Flux\Framework\Http\HttpClient;
-use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\Exception\ClientException;
+use \Flux\Framework\Http\HttpClient;
+beforeAll(function () {
+    // Check if running inside GitHub Actions
+    if (getenv('GITHUB_ACTIONS') === 'true') {
+        self::markTestSkipped('Skipping '.__CLASS__.' when running in GitHub Actions.');
+    }
+});
 
-class HttpClientAgainstRealDomainTest extends TestCase { 
+it('can request stuff', function () {
+    $client = new HttpClient();
+    $resp = $client->request('GET', 'https://fluxfx.nl');
 
-    public static function setUpBeforeClass(): void
-    {
-        // Check if running inside GitHub Actions
-        if (getenv('GITHUB_ACTIONS') === 'true') {
-            self::markTestSkipped('Skipping '.__CLASS__.' when running in GitHub Actions.');
-        }
+    expect($resp->getStatusCode())->toEqual(200);
+
+    expect($resp->getContent())->toContain('<html');
+});
+it('streams stuff', function () {
+    $client = new HttpClient();
+    $resp = $client->request('GET', 'https://fluxfx.nl');
+
+    $content = '';
+    foreach ($client->stream($resp) as $chunk) { 
+        $content .= $chunk->getContent();
     }
 
-    /**
-     * @test
-     */
-    function it_can_request_stuff()  {
-        $client = new HttpClient();
-        $resp = $client->request('GET', 'https://fluxfx.nl');
+    expect($content)->toContain('<html');
+});
+it('can stream lines', function () {
+    $client = new HttpClient();
+    $resp = $client->request('GET', 'https://fluxfx.nl');
 
-        $this->assertEquals(200, $resp->getStatusCode());
-        $this->assertStringContainsString('<html', $resp->getContent());
+    $content = '';
+    foreach ($client->stream($resp) as $chunk) { 
+        $content .= $chunk->getContent();
     }
 
-    /**
-     * @test
-     */
-    function it_streams_stuff() { 
-        $client = new HttpClient();
-        $resp = $client->request('GET', 'https://fluxfx.nl');
-
-        $content = '';
-        foreach ($client->stream($resp) as $chunk) { 
-            $content .= $chunk->getContent();
-        }
-        $this->assertStringContainsString('<html', $content);
+    $resp = $client->request('GET', 'https://fluxfx.nl');
+    $lineContent = '';
+    foreach ($client->streamLines($resp) as $line) {
+        $lineContent .= $line . "\n";
     }
 
-    /**
-     * @test
-     */
-    function it_can_stream_lines() { 
-        $client = new HttpClient();
-        $resp = $client->request('GET', 'https://fluxfx.nl');
-
-        $content = '';
-        foreach ($client->stream($resp) as $chunk) { 
-            $content .= $chunk->getContent();
-        }
-
-        $resp = $client->request('GET', 'https://fluxfx.nl');
-        $lineContent = '';
-        foreach ($client->streamLines($resp) as $line) {
-            $lineContent .= $line . "\n";
-        }
-
-        $this->assertEquals(trim($content), trim($lineContent));
+    expect(trim($lineContent))->toEqual(trim($content));
+});
+test('stream jsonlines will throw decode exceptions', function () {
+    $client = new HttpClient();
+    $resp = $client->request('GET', 'https://fluxfx.nl');
+    $lineContent = '';
+    $this->expectException(JsonException::class);
+    foreach ($client->streamJsonlines($resp) as $line) {
+        $lineContent .= $line . "\n";
     }
+});
 
-    /**
-     * @test
-     */
-    function stream_jsonlines_will_throw_decode_exceptions() { 
-        $client = new HttpClient();
-        $resp = $client->request('GET', 'https://fluxfx.nl');
-        $lineContent = '';
-        $this->expectException(JsonException::class);
-        foreach ($client->streamJsonlines($resp) as $line) {
-            $lineContent .= $line . "\n";
-        }
-    }
-
-
-    /**
-     * @ test
-     * @skip
-     */
-    function semi_succesful_requests_are_debuggable(): void {
-        $client = new HttpClient();
-        $resp = $client->request('POST', 'https://fluxfx.nl/request_exception', [
-            'body' => json_encode(['my_data' => 1, 'expect' => 'a non positive http'])
-        ]);
-        try { 
-            $resp->getContent();
-        } catch(ClientException $e) { 
-            $result = $client->debugResponse($e->getResponse());
-
-            // The HTTP/2 404 header is visible
-            $this->assertStringContainsString('HTTP/2 404', $result);
-
-            // Our request content-type is visible
-            $this->assertStringContainsString('content-type: application/x-www-form-urlencoded', $result);
-            
-            // The data that we posted is echo'ed back.
-            $this->assertStringContainsString('my_data', $result);
-
-            // A sample of the response body is shown.
-            $this->assertStringContainsString('<html', $result);
-        }
-    }
-    
-    /**
-     * @test
-     */
-    function no_connection_requests_are_also_debuggable() {
-        $client = new HttpClient();
-        $resp = $client->request('POST', 'https://fluxfx.nl:1234/request_exception', [
-            'body' => json_encode(['my_data' => 1, 'expect' => 'a non positive http'])
-        ]);
-        try { 
-            $resp->getContent();
-        } catch(\Exception $e) { 
-            $this->assertStringContainsString('failed to connect', strtolower($client->debugResponse($resp)));
-        }
-    }
-
-    /**
-     * @test
-     */
-    function sensitive_info_is_redacted_in_debug_output() { 
-        $client = new HttpClient();
-        $resp = $client->request('POST', 'https://fluxfx.nl/request_exception', [
-            'body' => json_encode(['my_data' => 1, 'expect' => 'a non positive http']),
-            'headers' => [
-                'authorization' => 'Basic THIS_IS_MY_PASSWORD'
-            ]
-        ]);
-
-        try { 
-            $resp->getContent();
-        } catch(Exception) { 
-            $this->assertStringNotContainsString('Basic THIS_IS_MY_PASSWORD', $client->debugResponse($resp));
-        }
-    }
-
-    /**
-     * @test
-     */
-    function statistics_are_being_kept() {
-
-        HttpClient::resetStats();
-
-        $client = new HttpClient();
-        $resp = $client->request('POST', 'https://fluxfx.nl', [
-            'body' => 'blabla'
-        ]);
-        
-        $this->assertEquals(1, HttpClient::getStats('reqs'), 'There is one request recorded');
-        $this->assertEquals(0, HttpClient::getStats('resps'), 'There should be zero responses yet.');
-
-        $resp->getStatusCode();
+it("semi succesful requests are debuggable", function () {
+    $client = new HttpClient();
+    $resp = $client->request('POST', 'https://fluxfx.nl/request_exception', [
+        'body' => json_encode(['my_data' => 1, 'expect' => 'a non positive http'])
+    ]);
+    try { 
         $resp->getContent();
+    } catch(ClientException $e) { 
+        $result = strtolower($client->debugResponse($e->getResponse()));
+
+        // The HTTP/2 404 header is visible
+        expect($result)->toContain('http/2 404');
+
+        // Our request content-type is visible
+        expect($result)->toContain('content-type: application/x-www-form-urlencoded');
         
-        $this->assertEquals(1, HttpClient::getStats('reqs'), 'There is one request recorded');
+        // The data that we posted is echo'ed back.
+        expect($result)->toContain('my_data');
 
-        $this->assertEquals(1, HttpClient::getStats('resps'), 'There should be one response recorded.');
-
-        // echo "Downloaded bytes: " . HttpClient::getStats('b_down') . "\n"; ob_flush();
-
-        $this->assertGreaterThan(0, HttpClient::getStats('b_down'));
-        $this->assertGreaterThan(0, HttpClient::getStats('b_up'));
+        // A sample of the response body is shown.
+        expect($result)->toContain('<html');
     }
+});
 
-    /**
-     * @test
-     */
-    function statistics_are_being_kept_even_when_streaming() {
-
-        HttpClient::resetStats();
-
-        $client = new HttpClient();
-        $resp = $client->request('POST', 'https://fluxfx.nl', [
-            'body' => 'blabla'
-        ]);
-        
-        $this->assertEquals(1, HttpClient::getStats('reqs'), 'There is one request recorded');
-        $this->assertEquals(0, HttpClient::getStats('resps'), 'There should be zero responses yet.');
-
-        foreach ($client->stream($resp) as $chunk) {
-
-        }
-        
-        $this->assertEquals(1, HttpClient::getStats('reqs'), 'There is one request recorded');
-        $this->assertEquals(1, HttpClient::getStats('resps'), 'There should be one response recorded.');
-
-        $this->assertGreaterThan(0, HttpClient::getStats('b_down'));
-
-        $this->assertGreaterThan(0, HttpClient::getStats('b_up'));
-    }
-
-    /**
-     * @test 
-     */
-    function streaming_and_non_streaming_have_equal_stats() { 
-
-        HttpClient::resetStats();
-
-        
-        $client = new HttpClient();
-        $resp = $client->request('POST', 'https://fluxfx.nl', [
-            'body' => 'blabla'
-        ]);
+test('no connection requests are also debuggable', function () {
+    $client = new HttpClient();
+    $resp = $client->request('POST', 'https://fluxfx.nl:1234/request_exception', [
+        'body' => json_encode(['my_data' => 1, 'expect' => 'a non positive http'])
+    ]);
+    try { 
         $resp->getContent();
-
-        $nonStreamingStats = HttpClient::getStats();
-
-        HttpClient::resetStats();
-
-        $client = new HttpClient();
-        $resp = $client->request('POST', 'https://fluxfx.nl', [
-            'body' => 'blabla'
-        ]);
-        foreach ($client->stream($resp) as $chunk) { }
-
-        $streamingStats = HttpClient::getStats();
-
-        $this->assertEquals($nonStreamingStats, $streamingStats, 'Streaming and non-streaming stats should be equal.');
+    } catch(\Exception $e) { 
+        expect(strtolower($client->debugResponse($resp)))->toContain('failed to connect');
     }
-    /**
-     * @test 
-     */
-    function streaming_and_non_streaming_have_equal_stats_streamlines() { 
+});
+test('sensitive info is redacted in debug output', function () {
+    $client = new HttpClient();
+    $resp = $client->request('POST', 'https://fluxfx.nl/request_exception', [
+        'body' => json_encode(['my_data' => 1, 'expect' => 'a non positive http']),
+        'headers' => [
+            'authorization' => 'Basic THIS_IS_MY_PASSWORD'
+        ]
+    ]);
 
-        HttpClient::resetStats();
-
-        $client = new HttpClient();
-        $resp = $client->request('POST', 'https://fluxfx.nl', [
-            'body' => 'blabla'
-        ]);
+    try { 
         $resp->getContent();
+    } catch(Exception) { 
+        expect($client->debugResponse($resp))->toContain('Basic TH************RD');
+    }
+});
+test('statistics are being kept', function () {
+    HttpClient::resetStats();
 
-        $nonStreamingStats = HttpClient::getStats();
+    $client = new HttpClient();
+    $resp = $client->request('POST', 'https://fluxfx.nl', [
+        'body' => 'blabla'
+    ]);
 
-        HttpClient::resetStats();
+    expect(HttpClient::getStats('reqs'))->toEqual(1, 'There is one request recorded');
+    expect(HttpClient::getStats('resps'))->toEqual(0, 'There should be zero responses yet.');
 
-        $client = new HttpClient();
-        $resp = $client->request('POST', 'https://fluxfx.nl', [
-            'body' => 'blabla'
-        ]);
-        foreach ($client->streamLines($resp) as $chunk) { }
+    $resp->getStatusCode();
+    $resp->getContent();
 
-        $streamingStats = HttpClient::getStats();
+    expect(HttpClient::getStats('reqs'))->toEqual(1, 'There is one request recorded');
 
-        $this->assertEquals($nonStreamingStats, $streamingStats, 'Streaming and non-streaming stats should be equal.');
+    expect(HttpClient::getStats('resps'))->toEqual(1, 'There should be one response recorded.');
+
+    // echo "Downloaded bytes: " . HttpClient::getStats('b_down') . "\n"; ob_flush();
+    expect(HttpClient::getStats('b_down'))->toBeGreaterThan(0);
+    expect(HttpClient::getStats('b_up'))->toBeGreaterThan(0);
+});
+test('statistics are being kept even when streaming', function () {
+    HttpClient::resetStats();
+
+    $client = new HttpClient();
+    $resp = $client->request('POST', 'https://fluxfx.nl', [
+        'body' => 'blabla'
+    ]);
+
+    expect(HttpClient::getStats('reqs'))->toEqual(1, 'There is one request recorded');
+    expect(HttpClient::getStats('resps'))->toEqual(0, 'There should be zero responses yet.');
+
+    foreach ($client->stream($resp) as $chunk) {
+
     }
 
+    expect(HttpClient::getStats('reqs'))->toEqual(1, 'There is one request recorded');
+    expect(HttpClient::getStats('resps'))->toEqual(1, 'There should be one response recorded.');
 
-    /**
-     * @test
-     */
-    function statistics_are_being_kept_even_with_extended_classes() {
+    expect(HttpClient::getStats('b_down'))->toBeGreaterThan(0);
 
-        HttpClient::resetStats();
+    expect(HttpClient::getStats('b_up'))->toBeGreaterThan(0);
+});
+test('streaming and non streaming have equal stats', function () {
+    HttpClient::resetStats();
 
-        $client = new class extends HttpClient { };
-        
-        $resp = $client->request('POST', 'https://fluxfx.nl', [
-            'body' => 'blabla'
-        ]);
-        
-        $this->assertEquals(1, $client::getStats('reqs'), 'There is one request recorded');
-        $this->assertEquals(0, $client::getStats('resps'), 'There should be zero responses yet.');
+    $client = new HttpClient();
+    $resp = $client->request('POST', 'https://fluxfx.nl', [
+        'body' => 'blabla'
+    ]);
+    $resp->getContent();
 
-        foreach ($client->stream($resp) as $chunk) {
+    $nonStreamingStats = HttpClient::getStats();
 
-        }
-        
-        $this->assertEquals(1, $client::getStats('reqs'), 'There is one request recorded');
-        $this->assertEquals(1, $client::getStats('resps'), 'There should be one response recorded.');
+    HttpClient::resetStats();
 
-        $this->assertGreaterThan(0, $client::getStats('b_down'));
-        $this->assertGreaterThan(0, $client::getStats('b_up'));
+    $client = new HttpClient();
+    $resp = $client->request('POST', 'https://fluxfx.nl', [
+        'body' => 'blabla'
+    ]);
+    foreach ($client->stream($resp) as $chunk) { }
+
+    $streamingStats = HttpClient::getStats();
+
+    expect($streamingStats)->toEqual($nonStreamingStats, 'Streaming and non-streaming stats should be equal.');
+});
+test('streaming and non streaming have equal stats streamlines', function () {
+    HttpClient::resetStats();
+
+    $client = new HttpClient();
+    $resp = $client->request('POST', 'https://fluxfx.nl', [
+        'body' => 'blabla'
+    ]);
+    $resp->getContent();
+
+    $nonStreamingStats = HttpClient::getStats();
+
+    HttpClient::resetStats();
+
+    $client = new HttpClient();
+    $resp = $client->request('POST', 'https://fluxfx.nl', [
+        'body' => 'blabla'
+    ]);
+    foreach ($client->streamLines($resp) as $chunk) { }
+
+    $streamingStats = HttpClient::getStats();
+
+    expect($streamingStats)->toEqual($nonStreamingStats, 'Streaming and non-streaming stats should be equal.');
+});
+test('statistics are being kept even with extended classes', function () {
+    HttpClient::resetStats();
+
+    $client = new class extends HttpClient { };
+
+    $resp = $client->request('POST', 'https://fluxfx.nl', [
+        'body' => 'blabla'
+    ]);
+
+    expect($client::getStats('reqs'))->toEqual(1, 'There is one request recorded');
+    expect($client::getStats('resps'))->toEqual(0, 'There should be zero responses yet.');
+
+    foreach ($client->stream($resp) as $chunk) {
+
     }
-}
+
+    expect($client::getStats('reqs'))->toEqual(1, 'There is one request recorded');
+    expect($client::getStats('resps'))->toEqual(1, 'There should be one response recorded.');
+
+    expect($client::getStats('b_down'))->toBeGreaterThan(0);
+    expect($client::getStats('b_up'))->toBeGreaterThan(0);
+});

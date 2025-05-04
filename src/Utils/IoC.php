@@ -29,10 +29,10 @@ class IoC implements ContainerInterface {
             $this->services[$id] = $serviceOrFactory;
             return;
         }
-        $this->services[$id] = fn() => $serviceOrFactory;
+        $this->services[$id] = fn(): object => $serviceOrFactory;
     }
 
-    function registerDecorator($decoratorClass, $decorateeClass) { 
+    function registerDecorator($decoratorClass, $decorateeClass): void { 
         $this->services[$decoratorClass] = eval('return fn('.$decorateeClass.' $x) => new '.$decoratorClass.'($x);'); 
     }
 
