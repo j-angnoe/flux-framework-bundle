@@ -4,7 +4,7 @@ use Flux\Framework\Chain\Chain;
 use PHPUnit\Framework\TestCase;
 
 if (!function_exists('chain')) { 
-    function chain(...$args): Chain { 
+    function chain(mixed ...$args): Chain { 
         return new Chain(...$args);
     }   
 }
@@ -18,14 +18,14 @@ class ChainCacheTest extends TestCase {
         return microtime(true) - $this->__startTime;
     }
 
-    private function assertItWasSlow() { 
-        return $this->assertTrue($this->getTheTime() > 0.9);
+    private function assertItWasSlow(): void { 
+        $this->assertTrue($this->getTheTime() > 0.9);
     }
-    private function assertItWasFast() { 
-        return $this->assertTrue($this->getTheTime() < 0.1);
+    private function assertItWasFast(): void { 
+        $this->assertTrue($this->getTheTime() < 0.1);
     }
 
-    private function getCacheSource(array $cacheOptions = [], bool $refreshCache = false) { 
+    private function getCacheSource(array $cacheOptions = [], bool $refreshCache = false): Chain { 
         if ($refreshCache) { 
             // only refresh cache to force re-running.
             $cacheOptions['refreshCache'] = true;
@@ -43,7 +43,7 @@ class ChainCacheTest extends TestCase {
     /**
      * @test
      */
-    function test_caching_capabilities() { 
+    function test_caching_capabilities(): void { 
         $this->startTimer();
 
         $myCacheId = __METHOD__ . uniqid();
@@ -68,7 +68,7 @@ class ChainCacheTest extends TestCase {
     /**
      * @test
      */
-    function anonymous_cache_is_recognized_by_stacktrace() {
+    function anonymous_cache_is_recognized_by_stacktrace(): void {
         $this->startTimer();
         $this->getCacheSource([], true)->run();
         $this->assertItWasSlow();
@@ -82,7 +82,7 @@ class ChainCacheTest extends TestCase {
      * @test
      */
 
-    function it_can_serve_reversed() { 
+    function it_can_serve_reversed(): void { 
         $source1 = chain([1,2,3,4,5])->cache('1m', ['id' => 'mycache', 'reverse' => true,'refreshCache' => true]);
 
         $result = $source1->toArray();

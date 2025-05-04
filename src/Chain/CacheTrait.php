@@ -6,6 +6,18 @@ namespace Flux\Framework\Chain;
 trait CacheTrait { 
 
 	private string $cacheFileInUse;
+	private $cacheKeys = [];
+
+	function setCacheKeys(string|int|array $keys, mixed $value = null): static { 
+		if (is_scalar($keys)) { 
+			$data = [$keys => $value];
+		} else {
+			$data = $keys;
+		}
+		$this->cacheKeys = array_merge($this->cacheKeys, $data);
+
+		return $this;
+	}
 
 	function cache($expires, ...$args): self {
 		$args = func_get_args();
@@ -49,12 +61,14 @@ trait CacheTrait {
 		 */
 		
 		if (preg_grep('/state|watch|track|arguments|params|args|id/', array_keys($options))) {
-			$cacheId = substr(sha1(json_encode($args)),0,12);
+			$cacheId = substr(sha1(json_encode(array_merge($this->cacheKeys, $args))),0,12);
+		} else if (isset($this->cacheKeys)) { 
+			$cacheId = substr(sha1(json_encode(array_merge($this->cacheKeys))),0,12);
 		} else { 
 			$callerFrame = (new \Exception)->getTrace()[0];
 			// you may set zend.exception_ignore_args to false for improved security/performance.
 			unset($callerFrame['args']);
-			$cacheId = substr(sha1(join(' ', $callerFrame).json_encode($args)),0,12);
+			$cacheId = substr(sha1(join(' ', $callerFrame).json_encode(array_merge($this->cacheKeys, $args))),0,12);
 		}
 
 

@@ -290,6 +290,8 @@ class Shell implements \IteratorAggregate {
         };
         
         $streamPositions = [];
+        $lastContent = [];
+
         // fputs(STDERR, 'Start reading from many handles' . "\n");
         foreach (static::readFromManyHandles($pipes, $runWhile, $streamPositions, $timeoutInSeconds) as $stream => $line) { 
             // fputs(STDERR, 'Receive `'.$line.'` on `'.$stream.'` from many handles' . "\n");

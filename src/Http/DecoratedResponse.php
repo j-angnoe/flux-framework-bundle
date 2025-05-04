@@ -66,6 +66,14 @@ class DecoratedResponse implements ResponseInterface {
         return $this->response->getInfo($type);
     }
 
+    function log(LoggerInterface $logger): void {
+        $logger->debug($this->logToString());
+    }
+
+    function logToString(): string { 
+        return HttpClient::debugResponse($this->response);
+    }
+    
     private $lastDelta = [];
 
     public function recordStats() { 

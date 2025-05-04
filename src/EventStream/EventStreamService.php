@@ -168,7 +168,7 @@ class EventStreamService
             $timeSinceLastWrite = microtime(true) - $this->lastWriteAt;
 
             // This is to ensure the connection is still alive.
-            if ($timeSinceLastWrite > 5) {
+            if ($timeSinceLastWrite > 50) {
                 $this->sendEvent('tick');
             }
 

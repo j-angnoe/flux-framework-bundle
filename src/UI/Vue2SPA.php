@@ -13,6 +13,7 @@ use Flux\Framework\UI\Vue2SPA\VueBlocksLayout;
 use Flux\Framework\Utils\IoC;
 use Symfony\Component\HttpKernel\EventListener\AbstractSessionListener;
 use Symfony\Contracts\Service\Attribute\Required;
+use Throwable;
 
 class Vue2SPA
 {
@@ -20,13 +21,14 @@ class Vue2SPA
 
     protected array $layouts = [];
 
-    static $defaultBridge = SimpleBridge::class;
+    /** @param class-string $defaultBridge */
+    static string $defaultBridge = SimpleBridge::class;
 
     private array $spaFiles = [];
     private array $spaFilesNonXhr = [];
     private IoC $ioc;
 
-    static $defaultLayouts = [
+    static array $defaultLayouts = [
         VueBlocksLayout::class
     ];
 
@@ -35,11 +37,11 @@ class Vue2SPA
     }
 
     #[Required]
-    public function setIoC(IoC $ioc) { 
+    public function setIoC(IoC $ioc): void { 
         $this->ioc = $ioc;
     }
 
-    public function setup(ServerBridgeInterface|LayoutInterface ...$elements) { 
+    public function setup(ServerBridgeInterface|LayoutInterface ...$elements): void { 
         $bridge = null;
         $layouts = [];
 
@@ -65,7 +67,7 @@ class Vue2SPA
     }
 
     private array $sharedData = [];
-    public function shareData(array|string $name, mixed $value = null) {
+    public function shareData(array|string $name, mixed $value = null): void {
         if (is_array($name)) {
             $this->sharedData += $name;
         } else { 
@@ -73,14 +75,14 @@ class Vue2SPA
         }
     }
 
-    public function setLayouts(mixed $layouts) { 
+    public function setLayouts(mixed $layouts): void { 
         if (!is_array($layouts)) { 
             $layouts = [$layouts];
         }
         $this->layouts = $layouts;
     }
 
-    public function addSpaFiles(string|array ...$spaFileOrDir) { 
+    public function addSpaFiles(string|array ...$spaFileOrDir): void { 
         foreach ($spaFileOrDir as $f) { 
             if (is_array($f)) {
                 $this->spaFiles = array_merge($this->spaFiles, $f);
@@ -128,7 +130,7 @@ class Vue2SPA
     }
 
     private array $argumentResolvers = [];
-    function resolveArgument(string $className, Closure $factory) { 
+    function resolveArgument(string $className, Closure $factory): void{ 
         $this->argumentResolvers[$className] = $factory;
     }
     public function serve(object $controller, Request $request, string|Closure $content): Response
@@ -162,9 +164,9 @@ class Vue2SPA
 
         try { 
             $request->getSession()->save();
-        } catch (\Exception $e){ } // ignore.
+        } catch (Throwable){ }
 
-        if ($content instanceof \Closure) {
+        if ($content instanceof Closure) {
             $content = $content();
         }
 

@@ -37,6 +37,21 @@ class TailFileStream implements UpdateStream {
         return feof($this->fh);
     }
 
+    private ?\Closure $endOfStreamDetector;
+    function setEndOfStream(\Closure $endOfStreamDetector) { 
+        $this->endOfStreamDetector = $endOfStreamDetector;
+    }
+
+    function endOfStream(): bool { 
+        if (!$this->isEndOfFile()) { 
+            return false;
+        }
+        if (isset($this->endOfStreamDetector)) { 
+            return call_user_func($this->endOfStreamDetector);
+        }
+        return false;
+    }
+
     public function nextUpdate(mixed $lastPosition): mixed {     
         try {            
             if ($lastPosition) fseek($this->fh, $lastPosition);
@@ -44,7 +59,7 @@ class TailFileStream implements UpdateStream {
             // some streams, like popen, dont support seeking...
         } 
 
-        while(!feof($this->fh)) {
+        while(!$this->isEndOfFile()) {
             $line = fgets($this->fh);
             if ($line) {            
                 if ($this->transform) { 

@@ -78,6 +78,32 @@ class BackgroundPHP {
             \$kernel->boot();
             PHP;
     }
+
+
+    static function fullySerializeClosure(\Closure $closure): string { 
+        $source = '';
+        $refl = new \ReflectionFunction($closure);
+        
+        [$fnSource, $uses] = static::getClosureSource($closure);
+        $source .= "$uses";
+        
+        $serializeVariables = $refl->getStaticVariables();
+        foreach ($serializeVariables as $varname => $value) {
+            try { 
+                if (is_object($value)) {
+                    $source .= '$' . $varname . ' = unserialize(' . var_export(serialize($value), true) . ');' . PHP_EOL;
+                    continue;
+                }
+            } catch (\Throwable $e) { 
+                throw new \Exception($e->getMessage() . ' at variable $'.$varname . ' of type ' . get_class($value));
+            }
+            $source .= '$' . $varname . ' = ' . var_export($value, true) . ';' . PHP_EOL;
+        }
+        
+        $source .= "\n" . 'return ' . rtrim($fnSource, "\n;") . ';';
+
+        return $source;
+    }
     
     function dispatch(\Closure $closure): BackgroundCommand { 
         // @fixme - als de source + closure static vars te groot is dan 
@@ -121,6 +147,7 @@ class BackgroundPHP {
         
         return (new Shell('cd ' . $cwd.'; php '.$tempnam))->dispatchBackgroundCommand();
     }
+
 
     function __invoke(\Closure $closure): BackgroundCommand { 
         return $this->dispatch($closure);

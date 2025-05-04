@@ -7,7 +7,7 @@ class ShellPipeMapTest extends TestCase {
     /**
      * @test
      */
-    function basics() { 
+    function basics(): void { 
         $shell = new Shell('(echo ?; echo ?; echo ?)', 
             'hallo ik ben joshua',
             'hallo ik ben joshua',

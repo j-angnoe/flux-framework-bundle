@@ -193,6 +193,23 @@ if (!function_exists('makeNested')) {
     }
 }
 
+function create_map(iterable $data, string $keysField, string|\Closure|null $valueField): array { 
+    $result = [];
+    foreach ($data as $row) { 
+        
+        if ($valueField instanceof \Closure) { 
+            $value = $valueField($row);
+        } else if ($valueField) {
+            $value = $row[$valueField] ?? null;
+        } else {
+            $value = $row;
+        }
+
+        $result[$row[$keysField] ?? '(null)'] = $value;
+    }
+    return $result;
+}
+
 /** 
  * Taken from univas
  * preg_grep based on keys, returns an array with keys and their values

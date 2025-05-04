@@ -16,7 +16,7 @@ class DuckDbTest extends TestCase {
     /**
      * @test
      */
-    function the_basics() {
+    function the_basics(): void {
         $db = new DuckDB();
         $chain = $db->query('SELECT 1 as x, 2 as y FROM range(5)');
         
@@ -31,7 +31,7 @@ class DuckDbTest extends TestCase {
     /**
      * @test
      */
-    function query_builder() { 
+    function query_builder(): void { 
         $db = new DuckDB();
         $result = $db->from('range(10)')
             ->select('range.range as x')

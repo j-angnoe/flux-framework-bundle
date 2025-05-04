@@ -4,14 +4,14 @@ use Flux\Framework\Chain\Chain;
 use PHPUnit\Framework\TestCase;
 
 if (!function_exists('chain')) { 
-    function chain(...$args): Chain { 
+    function chain(mixed ...$args): Chain { 
         return new Chain(...$args);
     }   
 }
 class ChainCoreTest extends TestCase {
 
 
-    function testConstructorNull() { 
+    function testConstructorNull(): void { 
         # __construct(null)
 
         $result = chain(null)->toArray();
@@ -19,19 +19,19 @@ class ChainCoreTest extends TestCase {
         $this->assertEquals([], $result);
     }
 
-    function testConstructorSimpleArray() {
+    function testConstructorSimpleArray(): void {
         $result = chain([1,2,3])->toArray();
 
         $this->assertEquals([1,2,3], $result);
     }
 
-    function testConstructorIterator() { 
+    function testConstructorIterator(): void { 
         # __construct(Iterator)
         $result = chain(new ArrayIterator([4,5,6]))->toArray();
         $this->assertEquals([4,5,6], $result);
     }
 
-    function testConstructorGenerator() { 
+    function testConstructorGenerator(): void { 
         $result = chain(function () {
             yield 7;
             yield 8;
@@ -41,7 +41,7 @@ class ChainCoreTest extends TestCase {
         $this->assertEquals([7,8,9], $result);
     }
         
-    function testConstructorResource() { 
+    function testConstructorResource(): void { 
         $handle = fopen('php://temp','rw');
         fputs($handle, "1\n");
         fputs($handle, "2\n");
@@ -51,17 +51,17 @@ class ChainCoreTest extends TestCase {
         $this->assertEquals("1\n2\n3", $result);
     }
 
-    function testConstructorChain() { 
+    function testConstructorChain(): void { 
         $result = chain(chain([4,5,6]))->toArray();
         $this->assertEquals([4,5,6], $result);
     }
 
-    function testConstructorJsonSerializable() { 
+    function testConstructorJsonSerializable(): void { 
         $result = json_encode(chain([7,8,9]));
         $this->assertEquals('[7,8,9]', $result);
     }
 
-    function testPrintRFunction() { 
+    function testPrintRFunction(): void { 
         ob_start();
         $result = chain([1,2,3])->print_r()->toArray();
         $this->assertEquals([1,2,3], $result);
@@ -74,12 +74,12 @@ class ChainCoreTest extends TestCase {
         OUT)), preg_replace('/\s+/',' ',trim($content)));
     }
 
-    function testPipes() { 
+    function testPipes(): void { 
         $result = chain([1,2,3])->pipe(function($x) { return $x * 2; })->toArray();
         $this->assertEquals([2,4,6], $result);
     }
 
-    function testPipeGenerator() { 
+    function testPipeGenerator(): void { 
         ## pipe(Generator) (aka apply)
         $result = chain([3,2,1])
             ->pipe(function($iterator) { 
@@ -90,7 +90,7 @@ class ChainCoreTest extends TestCase {
         $this->assertEquals([6,4,2], $result);
     }
 
-    function testPipePassesOnlyTruthyStuff() { 
+    function testPipePassesOnlyTruthyStuff(): void { 
         ## pipe(closure) doesnt yield NULL values and empty strings and empty arrays.
         ## pipe(closure) does yield false, 0
         ## pipe(closure) yields everything else.  
@@ -112,7 +112,7 @@ class ChainCoreTest extends TestCase {
 
     }
 
-    function testApplyWorks() { 
+    function testApplyWorks(): void { 
         # apply(generator) should work
         $result = chain([1,2,3])
             ->apply(function ($iterator) {
@@ -123,23 +123,24 @@ class ChainCoreTest extends TestCase {
         $this->assertEquals([2,4,6], $result);
     }
 
-    function testApplyANonGeneratorYieldsAnError() { 
+    function testApplyANonGeneratorYieldsAnError(): void { 
         # apply(closure) that doesn't yield, what will happen?
 
         $this->expectException(TypeError::class);
 
         $result = chain([1,2,3])
-            ->apply(function ($iterator) {
-              foreach ($iterator as $i) {
-                $res[] = $i * 2;
-              }
-              return $res;
+            ->apply(function ($iterator): array {
+                $res = [];
+                foreach ($iterator as $i) {
+                    $res[] = $i * 2;
+                }
+                return $res;
             })->toArray();
         $this->assertEquals(null, $result);
 
     }
 
-    function testChainWindowFunction() { 
+    function testChainWindowFunction(): void { 
         # window() rows are received in right order
         # window(Closure) is supported, we will check out how many parameters the closure wants to determine the window size.
 
@@ -175,7 +176,7 @@ class ChainCoreTest extends TestCase {
         $this->assertEquals(4, $result);
     }
 
-    function testChainMapping() { 
+    function testChainMapping(): void { 
         # Mapping 
         ## mapWithKeys(closure) - closure should receive (value, key)
         $result = chain([1])
@@ -195,8 +196,9 @@ class ChainCoreTest extends TestCase {
 
     }
 
-    function testMapMayNotYield() { 
+    function testMapMayNotYield(): void { 
         $this->markTestIncomplete('This feature is broken');
+
         ## map(closure) - may not yield
         $this->expectException(Exception::class);
         $result = chain([1])
@@ -205,7 +207,7 @@ class ChainCoreTest extends TestCase {
             })->toArray();
     }
 
-    function testEachGenerator() { 
+    function testEachGenerator(): void { 
         # each(generator) - if you return a generator/iterable each will yield from that generator
 
         $result = chain([1,2,3])
@@ -226,7 +228,7 @@ class ChainCoreTest extends TestCase {
         $this->assertEquals([], $result);
     }
 
-    function testUniqueFeature() { 
+    function testUniqueFeature(): void { 
 
 
         # unique() - results are deduplicated accurately.
@@ -261,7 +263,7 @@ class ChainCoreTest extends TestCase {
         $this->assertEquals([1,2,3,1], $result);
     }
 
-    function testHead() { 
+    function testHead(): void { 
 
         $result = chain([1,2,3])
             ->head(1)
@@ -283,7 +285,7 @@ class ChainCoreTest extends TestCase {
     }
 
 
-    function testTail() { 
+    function testTail(): void { 
 
         $result = chain([1,2,3])
             ->tail(1)
@@ -304,7 +306,7 @@ class ChainCoreTest extends TestCase {
         $this->assertEquals([1,2,3], $result);
     }
 
-    function testSkip() { 
+    function testSkip(): void { 
         $result = chain([1,2,3])
             ->skip(1)
             ->toArray();
@@ -312,7 +314,7 @@ class ChainCoreTest extends TestCase {
         $this->assertEquals([2,3], $result);
     }
 
-    function testFilter() { 
+    function testFilter(): void { 
         $result = chain([1,2,3,4])
             ->filter(fn($x) => $x % 2)
             ->toArray();
@@ -320,7 +322,7 @@ class ChainCoreTest extends TestCase {
         $this->assertEquals([1,3], $result);
     }
 
-    function testSort() { 
+    function testSort(): void { 
         $result = chain([1,2,3,4])
             ->sortDesc()
             ->toArray();
@@ -334,13 +336,13 @@ class ChainCoreTest extends TestCase {
         $this->assertEquals([['id' => 4],['id' => 3],['id' => 2],['id' => 1]], $result);
     }
 
-    function testToString() { 
+    function testToString(): void { 
         $string = chain([1,2,3])->toString(',');
 
         $this->assertEquals('1,2,3', $string);
     }
 
-    function testFirstLast() { 
+    function testFirstLast(): void { 
         $result = chain([1,2,3])->first();
 
         $this->assertEquals(1, $result);
@@ -350,14 +352,14 @@ class ChainCoreTest extends TestCase {
         $this->assertEquals(3, $result);
     }
 
-    function testReduce() { 
+    function testReduce(): void { 
         $result = chain([1,2,3])
             ->reduce(fn($carry, $item) => $carry + $item, 0);
         
         $this->assertEquals(1 + 2 + 3, $result);
     }
 
-    function testRun() { 
+    function testRun(): void { 
         $iterations = 0;
 
         $result = chain([1,2,3])
@@ -368,7 +370,8 @@ class ChainCoreTest extends TestCase {
 
         $this->assertEquals(3, $iterations);
     }
-    function todo() {       
+    
+    function todo(): void {       
 
         # trim() - what happens to empty lines...?
         # head(n) - gives us the first n results

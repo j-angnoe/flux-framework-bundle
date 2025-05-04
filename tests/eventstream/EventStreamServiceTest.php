@@ -10,7 +10,7 @@ class EventStreamServiceTest extends TestCase
     /**
      * @test
      */
-    public function it_recognized_non_eventstream_requests()
+    public function it_recognized_non_eventstream_requests(): void
     {
         $headers = [];
         $request = Request::create('/whatever', 'GET', [], [], [], $headers);
@@ -23,7 +23,7 @@ class EventStreamServiceTest extends TestCase
     /**
      * @test
      */
-    public function it_recognized_real_eventstream_requests()
+    public function it_recognized_real_eventstream_requests(): void
     {
         $headers = [
             'HTTP_ACCEPT' => 'text/event-stream',
@@ -37,7 +37,7 @@ class EventStreamServiceTest extends TestCase
     /**
      * @test
      */
-    public function it_will_throw_when_trying_to_start_on_a_non_eventstream_request()
+    public function it_will_throw_when_trying_to_start_on_a_non_eventstream_request(): void
     {
         $this->expectException(Exception::class);
 
@@ -50,7 +50,7 @@ class EventStreamServiceTest extends TestCase
     /**
      * @test
      */
-    public function it_can_send_a_sse_data_message()
+    public function it_can_send_a_sse_data_message(): void
     {
         $headers = [];
         $request = Request::create('/whatever', 'GET', [], [], [], $headers);
@@ -70,7 +70,7 @@ class EventStreamServiceTest extends TestCase
     /**
      * @test
      */
-    public function it_can_send_a_sse_data_multi_line_message()
+    public function it_can_send_a_sse_data_multi_line_message(): void
     {
         $headers = [];
         $request = Request::create('/whatever', 'GET', [], [], [], $headers);
@@ -91,7 +91,7 @@ class EventStreamServiceTest extends TestCase
     /**
      * @test
      */
-    public function it_can_send_a_sse_data_message_with_position()
+    public function it_can_send_a_sse_data_message_with_position(): void
     {
         $headers = [];
         $request = Request::create('/whatever', 'GET', [], [], [], $headers);
@@ -108,7 +108,7 @@ class EventStreamServiceTest extends TestCase
     /**
      * @test
      */
-    public function it_can_send_a_sse_custom_event()
+    public function it_can_send_a_sse_custom_event(): void
     {
         $headers = [];
         $request = Request::create('/whatever', 'GET', [], [], [], $headers);
@@ -131,7 +131,7 @@ class EventStreamServiceTest extends TestCase
     /**
      * @test
      */
-    public function sse_custom_event_data_is_always_json_encoded()
+    public function sse_custom_event_data_is_always_json_encoded(): void
     {
         $headers = [];
         $request = Request::create('/whatever', 'GET', [], [], [], $headers);
@@ -154,7 +154,7 @@ class EventStreamServiceTest extends TestCase
     /**
      * @test
      */
-    public function it_sends_multiple_stream_offsets()
+    public function it_sends_multiple_stream_offsets(): void
     {
         $headers = [];
         $request = Request::create('/whatever', 'GET', [], [], [], $headers);
@@ -175,7 +175,7 @@ class EventStreamServiceTest extends TestCase
     /**
      * @test
      */
-    public function it_knows_about_the_offsets_to_resume_from()
+    public function it_knows_about_the_offsets_to_resume_from(): void
     {
         $headers = [
             'HTTP_ACCEPT' => 'text/event-stream',

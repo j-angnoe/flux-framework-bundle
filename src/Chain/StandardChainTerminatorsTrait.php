@@ -16,7 +16,7 @@ trait StandardChainTerminatorsTrait {
 
 	
 	// @tests count()
-	function count() { 
+	function count(): int { 
 		$count = 0;
 		foreach ($this->getIterator() as $r) {
 			$count++;
@@ -92,23 +92,32 @@ trait StandardChainTerminatorsTrait {
 	// @test output(resource) - outputs to resource
 	// @test output('php://stderr') - outputs to stderr
 	// @test output(null) - does execute but outputs nothing
+	// @test output(callback(str)) - outputs to your callback strings.
 	function output($handle = null): int {
 		$shouldClose = true;
 		if (is_resource($handle)) { 
 			// do nothing to handle.
 			$shouldClose = false;
+			$write = fn($str) => fputs($handle, $str);
+
 		} else if (is_string($handle)) {
 			$handle = fopen($handle,'w');
+			$write = fn($str) => fputs($handle, $str);
 		} else if (func_num_args() == 1 && $handle === null) { 
 			// User explicitly says output(null), so we put it to /dev/null
 			$handle = fopen('/dev/null', 'w');
+			$write = fn($str) => fputs($handle, $str);
+		} else if ($handle instanceof \Closure) {
+			$shouldClose = false;
+			$write = fn($line) => $handle(rtrim($line));
 		} else {
 			$handle = fopen('php://output','w');
+			$write = fn($str) => fputs($handle, $str);
 			$shouldClose = false;
 		}
 
-		if (!is_resource($handle)) {
-			throw new \Exception(__METHOD__ . ': Invalid argument #1, should be string|resource');
+		if (!is_resource($handle) && !($handle instanceof \Closure)) {
+			throw new \Exception(__METHOD__ . ': Invalid argument #1, should be string|resource|Closure');
 		}
 
 		$this->stats['out_bytes'] = -1;
@@ -128,12 +137,13 @@ trait StandardChainTerminatorsTrait {
 				$str =json_encode($r) . "\n";
 			}
 			$this->stats['out_bytes'] += strlen($str);
-			fputs($handle, $str);
+			$write($str);
 			$writtenLines++;
 		}
 		if ($shouldClose) {
 			fclose($handle);
 		}
+
 		if ($this->debug) { 
 			$nice_num = function() {
 				return $this->nice_number(...func_get_args());

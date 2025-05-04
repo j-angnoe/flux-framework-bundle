@@ -4,7 +4,7 @@ use Flux\Framework\Chain\Chain;
 use PHPUnit\Framework\TestCase;
 
 if (!function_exists('chain')) { 
-    function chain(...$args): Chain { 
+    function chain(mixed ...$args): Chain { 
         return new Chain(...$args);
     }   
 }
@@ -13,7 +13,7 @@ class ChainBufferTest extends TestCase {
     /**
      * @test
      */
-    function it_works() { 
+    function it_works(): void { 
         $currentOffset = -1;
         $chain = chain(function() use (&$currentOffset) {
             for($i=0;$i<10;$i++) { 
@@ -41,7 +41,7 @@ class ChainBufferTest extends TestCase {
     /**
      * @test
      */
-    function it_can_buffer_all() { 
+    function it_can_buffer_all(): void { 
         $currentOffset = -1;
         $chain = chain(function() use (&$currentOffset) {
             for($i=0;$i<10;$i++) { 

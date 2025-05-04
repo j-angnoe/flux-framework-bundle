@@ -23,11 +23,12 @@ class HttpClient implements HttpClientInterface {
         'b_up' => 0,
     ];
 
-    protected HttpClientInterface|Closure|null $client;
-
-    public function __construct(HttpClientInterface|Closure|null $client = null)
+    protected HttpClientInterface|null $client;
+    protected array $clientInits = [];
+    public function __construct(HttpClientInterface|null $client = null, \Closure|array|null $inits = null)
     {
         $this->client = $client ?? SymfonyHttpClient::create();
+        $this->clientInits = $inits ? (is_array($inits) ? $inits : [$inits]) : [];
     }
 
     public function withOptions(array $options): static
@@ -54,15 +55,21 @@ class HttpClient implements HttpClientInterface {
     }
 
     protected function getHttpClient(): HttpClientInterface { 
-        if ($this->client instanceof \Closure) { 
-            $this->client = ($this->client)();
+        if ($this->clientInits) { 
+            foreach ($this->clientInits as $fn) { 
+                $result = $fn($this->client);
+                if ($result instanceof HttpClientInterface) { 
+                    $this->client = $result;
+                }
+            }
+            $this->clientInits = [];
         }
         return $this->client;
     }
 
     static ?LoggerInterface $logger;
 
-    static function setLogger(LoggerInterface $logger): void {
+    static function setLogger(?LoggerInterface $logger): void {
         static::$logger = $logger;
     }
 

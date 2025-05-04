@@ -13,7 +13,7 @@ if (!class_exists('UnitTest_ChainWithQuickSearch')) {
 class ChainQuickSearchTest extends TestCase {
     private array $data;
 
-    function getDataSource() { 
+    function getDataSource(): Chain { 
         $this->data ??= (new UnitTest_ChainWithQuickSearch(range(1,100)))
             ->map(function($id) {
                 return [
@@ -33,7 +33,7 @@ class ChainQuickSearchTest extends TestCase {
         return (new UnitTest_ChainWithQuickSearch($this->data));
     }
 
-    function testQuickSearch() { 
+    function testQuickSearch(): void { 
         // $this->getDataSource()->output();
 
         // $this->getDataSource()->quicksearch('hombre')->output();
@@ -47,7 +47,7 @@ class ChainQuickSearchTest extends TestCase {
         $this->assertEquals($subjectCount1, $subjectCount2, 'Subject counts should be equal');
     }
 
-    function testQuickSearchModifiers() {
+    function testQuickSearchModifiers(): void {
         $subjectCount1 = $this->getDataSource()->quicksearch('id=83')->count();
         $this->assertEquals(1,$subjectCount1);
 

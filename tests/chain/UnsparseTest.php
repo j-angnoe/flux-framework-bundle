@@ -8,7 +8,7 @@ class UnitTestUnsparseChain extends Chain {
     use UnsparseTrait;
 }
 class UnsparseTest extends TestCase {
-    function testUnsparse() { 
+    function testUnsparse(): void { 
         $chain = new UnitTestUnsparseChain([
             ['id' => 1],
             ['id' => 2,'name'=>'joshua'],

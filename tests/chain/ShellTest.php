@@ -16,22 +16,22 @@ class ShellTest extends TestCase {
     function setUp(): void {
         error_reporting(E_ALL);
     }
-    function test_it_escapes_all_command_arguments_by_default() { 
+    function test_it_escapes_all_command_arguments_by_default(): void { 
         $result = UnitTest_Shell_Chain::formatCommand('a','b','c');
         $this->assertEquals("a 'b' 'c'", $result);
     }
 
-    function test_you_can_define_placeholders_questionmark_and_percent_s() { 
+    function test_you_can_define_placeholders_questionmark_and_percent_s(): void { 
         $result = UnitTest_Shell_Chain::formatCommand('a ? %s','b','c');
         $this->assertEquals("a 'b' c", $result);
     }
 
-    function test_more_arguments_then_placeholders_will_be_escaped() { 
+    function test_more_arguments_then_placeholders_will_be_escaped(): void { 
         $result = UnitTest_Shell_Chain::formatCommand('a ? %s','b','c','d','e');
         $this->assertEquals("a 'b' c 'd' 'e'", $result);
     }
 
-    function test_i_can_run_a_command() { 
+    function test_i_can_run_a_command(): void { 
         $result = UnitTest_Shell_Chain::shell('echo ?; echo ?; echo ?; echo ?;', 'hallo','hoe','is','het');
 
         $this->assertInstanceOf(UnitTest_Shell_Chain::class, $result);
@@ -41,7 +41,7 @@ class ShellTest extends TestCase {
         $this->assertEquals(['hallo','hoe','is','het'], $lines);
     }
 
-    function test_what_happens_to_stderr() { 
+    function test_what_happens_to_stderr(): void { 
         // Stderr will be outputted in stream
         $result = UnitTest_Shell_Chain::shell('>&2 echo "STDERR"; echo "hoi"');
         $items = $result->toArray();
@@ -50,7 +50,7 @@ class ShellTest extends TestCase {
         $this->assertContains('stderr > STDERR', $items);
     }
 
-    function test_what_happens_on_pipe_failure() { 
+    function test_what_happens_on_pipe_failure(): void { 
 
         // you can define it
         $command = UnitTest_Shell_Chain::shell('cat /does/not/exist | wc -l');
@@ -71,7 +71,7 @@ class ShellTest extends TestCase {
      * 
      * This test is a bit heavy to run all-the-time.
      */
-    function test_shell_can_handle_big_data() {
+    function test_shell_can_handle_big_data(): void {
         static::markTestSkipped('Skipping big-data test');
 
         $command = UnitTest_Shell_Chain::shell('php -r ?', <<<'PHP'
@@ -106,7 +106,7 @@ class ShellTest extends TestCase {
         $this->assertEquals(120_000_000, $command->getStats('read_bytes'));
     }
 
-    function test_shell_can_launch_a_command_with_limited_runtime() {
+    function test_shell_can_launch_a_command_with_limited_runtime(): void {
         $command = new Shell('php -r ?', <<<'PHP'
             $start = microtime(true);
             for($i=0;$i<1000;$i++) {
@@ -132,7 +132,7 @@ class ShellTest extends TestCase {
 
     }
 
-    function test_shell_can_launch_a_limited_command_but_always_receive_failure_signals() {
+    function test_shell_can_launch_a_limited_command_but_always_receive_failure_signals(): void {
         $command = new Shell('php -r ?', <<<'PHP'
             // Generate a parse error
             intented parse error!;
@@ -151,7 +151,7 @@ class ShellTest extends TestCase {
 
     }
 
-    function test_i_can_dispatch_a_background_command_and_handle_falsy_lines() { 
+    function test_i_can_dispatch_a_background_command_and_handle_falsy_lines(): void { 
         $command = new Shell('php -r ?', <<<'PHP'
             for($i=0;$i<1_000;$i++){
                 echo "0\n";
@@ -167,7 +167,7 @@ class ShellTest extends TestCase {
         $this->assertCount(1000 +1000, $lines, 'There should be 2000 lines (1000 stdout, 1000 stderr).');
     }
 
-    function test_i_can_dispatch_a_background_command_and_receive_all_output_streams() { 
+    function test_i_can_dispatch_a_background_command_and_receive_all_output_streams(): void { 
         $command = new Shell('php -r ?', <<<'PHP'
             for($i=0;$i<10;$i++){
                 echo "Iteration $i\n";
@@ -176,6 +176,7 @@ class ShellTest extends TestCase {
             }
         PHP);
 
+        $lines = [];
         foreach ($command->dispatchBackgroundCommand() as $line) { 
             $lines[] = $line;
         }
@@ -183,7 +184,7 @@ class ShellTest extends TestCase {
         $this->assertCount(20, $lines, 'There should be 10 stdout lines and 10 stderr lines.');
     }
 
-    function test_i_can_dispatch_a_background_command_and_stop_it_midway() { 
+    function test_i_can_dispatch_a_background_command_and_stop_it_midway(): void { 
         $command = new Shell('php -r ?', <<<'PHP'
             for($i=0;$i<100;$i++){
                 echo "iteration $i\n";
@@ -192,7 +193,7 @@ class ShellTest extends TestCase {
         PHP);
 
         $command = $command->dispatchBackgroundCommand();
-
+        $lines = [];
         foreach ($command as $line) { 
             if ($line === 'iteration 10') { 
                 $command->stop();
@@ -206,7 +207,7 @@ class ShellTest extends TestCase {
         $this->assertLessThan(30, count($lines), 'The command should have stopped in less then 30 iterations or so..');
     }
 
-    function test_i_can_dispatch_a_background_command_and_only_iterate_stdout() { 
+    function test_i_can_dispatch_a_background_command_and_only_iterate_stdout(): void { 
         $command = new Shell('php -r ?', <<<'PHP'
             for($i=0;$i<10;$i++){
                 echo "Iteration $i\n";
@@ -240,7 +241,7 @@ class ShellTest extends TestCase {
         $this->assertCount(20, $lines);
     }
 
-    function test_yield_last_line() {
+    function test_yield_last_line(): void {
         $command = new Shell('php -r ?', <<<'PHP'
             echo "Just echo something without a NEWLINE";
         PHP);
@@ -256,7 +257,7 @@ class ShellTest extends TestCase {
 
     }
 
-    function test_the_exitcode_will_be_available_afterwards() { 
+    function test_the_exitcode_will_be_available_afterwards(): void { 
         $command = new Shell('php -r ?', <<<'PHP'
             echo "Just echo something without a NEWLINE";
         PHP);
@@ -272,7 +273,7 @@ class ShellTest extends TestCase {
     }
 
 
-    function test_getIterator_yields_after_timeoutInSeconds_during_long_running_process() { 
+    function test_getIterator_yields_after_timeoutInSeconds_during_long_running_process(): void { 
         $command = new Shell('php -r ?', <<<'PHP'
             echo "Starting\n";
             sleep(1);
@@ -290,7 +291,7 @@ class ShellTest extends TestCase {
         static::assertGreaterThan(6, count($signals), 'There should have been about 10 timeouts while running the command');
     }
 
-    function test_shell_while_running() {
+    function test_shell_while_running(): void {
         $command = new Shell('php -r ?', <<<'PHP'
             echo "Starting\n";
             for($i=0;$i<100;$i++) { 

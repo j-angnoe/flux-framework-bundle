@@ -7,7 +7,7 @@ class ChainReverseTest extends TestCase {
      * @test
      */
 
-    function it_can_read_files_in_reverse() {
+    function it_can_read_files_in_reverse(): void {
         $stream = tmpfile();
         for($i=1;$i<100;$i++) { 
             fputs($stream, "line $i\n");

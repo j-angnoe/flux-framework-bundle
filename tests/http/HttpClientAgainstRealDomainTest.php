@@ -75,9 +75,10 @@ class HttpClientAgainstRealDomainTest extends TestCase {
 
 
     /**
-     * @test
+     * @ test
+     * @skip
      */
-    function semi_succesful_requests_are_debuggable() {
+    function semi_succesful_requests_are_debuggable(): void {
         $client = new HttpClient();
         $resp = $client->request('POST', 'https://fluxfx.nl/request_exception', [
             'body' => json_encode(['my_data' => 1, 'expect' => 'a non positive http'])

@@ -6,6 +6,7 @@ use IteratorAggregate;
 use JsonSerializable;
 use Closure;
 use ArrayIterator;
+use Countable;
 use ReflectionFunction;
 use Traversable;
 use EmptyIterator;
@@ -25,7 +26,7 @@ interface PreparedChain {
 
 
 /** @phpstan-consistent-constructor */
-class Chain implements IteratorAggregate, JsonSerializable, Chainable { 
+class Chain implements IteratorAggregate, JsonSerializable, Chainable, Countable { 
 	use CacheTrait;
 	use QuickSearchTrait;
 
@@ -893,8 +894,15 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable {
 		return $obj;
     }
 	
-	static function glob($directory) { 
-		return new static(new GlobIterator($directory));
+	static function glob($directory, int $globFlags = 0) { 
+		if ($globFlags) {
+			return (new static(glob($directory, $globFlags)))
+				->map(function(string $i) { 
+					return new \SplFileInfo($i);
+				});
+		} else { 
+			return new static(new GlobIterator($directory));
+		}
 	}
 
 
