@@ -13,7 +13,8 @@ class DataBrowser implements JsonSerializable {
         private \Closure|\Traversable $datasource,
         private bool $cache = true,
         private ?array $previewOptions = null,
-        private \Closure|null $summary = null 
+        private \Closure|null $summary = null,
+        private \Closure|null $privacyMap = null
     ) { 
     }
 
@@ -73,6 +74,9 @@ class DataBrowser implements JsonSerializable {
         }
         $previewOptions['size'] ??= 25;
         
+        if ($this->privacyMap) { 
+            $datasource->map($this->privacyMap)->filter();
+        }
         if ($previewOptions['size'] !== 'all') { 
             $previewOptions['skip'] ??= 0;
 

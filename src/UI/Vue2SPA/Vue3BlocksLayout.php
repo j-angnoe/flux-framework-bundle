@@ -32,14 +32,15 @@ class Vue3BlocksLayout implements LayoutInterface {
         $content = $this->ensureDefaultAppComponent($content);
 
         // $content = HtmlUtils::append('head', '<script src="https://unpkg.com/vue-blocks@0.4.3/dist/vue-blocks.js"></script>', $content);
-        $content = HtmlUtils::append('head','<link href="/assets/_vue3-harness/dist/vue-harness-layer.css" rel="stylesheet">', $content);
-        $content = HtmlUtils::append('head','<script src="/assets/_vue3-harness/dist/vue-harness.umd.js"></script>', $content);
-        $content = HtmlUtils::append('head', '<script type="importmap">
-        {
-            "imports": {
-                "vue": "/assets/_vue3-harness/dist/vue3-harness.esm.js"
-            }
-        }</script>', $content);
+        $content = HtmlUtils::append('head','<link href="/assets/_vue-harness/dist/vue-harness.css" rel="stylesheet">', $content);
+        $content = HtmlUtils::append('head','<link href="/assets/_vue3-harness/dist/vue3-harness.css" rel="stylesheet">', $content);
+        $content = HtmlUtils::append('head','<script src="/assets/_vue3-harness/dist/vue3-harness.umd.js"></script>', $content);
+        // $content = HtmlUtils::append('head', '<script type="importmap">
+        // {
+        //     "imports": {
+        //         "vue": "/assets/_vue3-harness/dist/vue3-harness.esm.js"
+        //     }
+        // }</script>', $content);
 
         $content = HtmlUtils::append('body', <<<'HTML'
         <script>    
@@ -64,7 +65,7 @@ class Vue3BlocksLayout implements LayoutInterface {
 
         window.loadSPA = function(url, registrar) { 
             if (Array.isArray(url)) {
-                return Promise.all(url.map(u => loadSPA(u, registrar)));
+                return Promise.allSettled(url.map(u => loadSPA(u, registrar)));
             }
 
             console.log("loadSPA(" + url +")");
@@ -120,14 +121,14 @@ class Vue3BlocksLayout implements LayoutInterface {
                 }
                 var deferredScripts = [];
                 for(var script of scripts) {
-                    if (script.defer || script.async) { 
+                    if (script.defer) { 
                         deferredScripts.push(addScript(script));
                     } else {
                         await addScript(script);
                     }
                 }
                 
-                await Promise.all(deferredScripts);
+                await Promise.allSettled(deferredScripts);
 
                 [...container.content.querySelectorAll('script')].forEach(script => {
                     var script = script.innerHTML;
@@ -183,7 +184,6 @@ class Vue3BlocksLayout implements LayoutInterface {
 
         $content = HtmlUtils::append('body', <<<'HTML'
         <template component="app">
-            <div>
                 <nav class="main-nav navbar nav navbar-expand" v-if="$router.options.routes.length > 1">
                     <!-- f
                     <div class="navbar-brand">
@@ -263,6 +263,7 @@ class Vue3BlocksLayout implements LayoutInterface {
             'xbm' => 'image/xbm',
             'xml' => 'text/xml',
             'ttf' => 'font/ttf',
+            'woff' => 'font/woff',
             'woff2' => 'font/woff2',
             default => throw new \Exception('Could not determine mime-type for extension `'.$ext.'`')
         };

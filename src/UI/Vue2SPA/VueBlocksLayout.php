@@ -29,13 +29,12 @@ class VueBlocksLayout implements LayoutInterface {
         $content = $this->ensureDefaultEntrypoint($content);
         $content = $this->ensureDefaultAppComponent($content);
 
-
         // $content = HtmlUtils::append('head', '<script src="https://unpkg.com/vue-blocks@0.4.3/dist/vue-blocks.js"></script>', $content);
         $content = HtmlUtils::append('head','<link href="/assets/_vue-harness/dist/vue-harness.css" rel="stylesheet">', $content);
         $content = HtmlUtils::append('head','<script src="/assets/_vue-harness/dist/vue-harness.js"></script>', $content);
 
         $content = HtmlUtils::append('body', <<<'HTML'
-        <script>
+        <script>    
         Vue.prototype.appData ??= function (keyName, defaultValue) {
             if (!this.$root.__appData) { 
                 var p = this;
@@ -57,7 +56,7 @@ class VueBlocksLayout implements LayoutInterface {
 
         window.loadSPA = function(url, registrar) { 
             if (Array.isArray(url)) {
-                return Promise.all(url.map(u => loadSPA(u, registrar)));
+                return Promise.allSettled(url.map(u => loadSPA(u, registrar)));
             }
 
             console.log("loadSPA(" + url +")");
@@ -76,7 +75,8 @@ class VueBlocksLayout implements LayoutInterface {
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest',
                     },
-                }).then(res => res.text());
+                }).then(createSimpleBridge.errorHandler)
+                .then(t => t.text())
 
                 var container = document.createElement('template')
                 container.innerHTML = txt;
@@ -120,7 +120,7 @@ class VueBlocksLayout implements LayoutInterface {
                     }
                 }
                 
-                await Promise.all(deferredScripts);
+                await Promise.allSettled(deferredScripts);
 
                 [...container.content.querySelectorAll('script')].forEach(script => {
                     var script = script.innerHTML;
@@ -138,7 +138,7 @@ class VueBlocksLayout implements LayoutInterface {
 
                 resolve(components);
 
-                console.log('loaded');
+                console.log('loaded ' + url);
             }))
         }
         
@@ -177,7 +177,7 @@ class VueBlocksLayout implements LayoutInterface {
         $content = HtmlUtils::append('body', <<<'HTML'
         <template component="app">
             <div>
-                <nav class="main-nav navbar nav navbar-expand" v-if="$router.options.routes.length > 1">
+                <nav class="main-nav navbar nav navbar-expand" v-if="displayableRoutes.length > 1">
                     <!-- f
                     <div class="navbar-brand">
                         <slot name="brand">
@@ -189,8 +189,7 @@ class VueBlocksLayout implements LayoutInterface {
                         <slot name="navbar">
                             <router-link 
                             class="nav-link"
-                            v-for="r in $router.options.routes"
-                                disabled-v-if="shouldShowInMenu(r)"
+                            v-for="r in displayableRoutes"
                             :to="r.path">
                                 <i v-if="r.icon" class="fa" :class="r.icon"></i>
                                 <span v-if="r.name || r.title || r.caption">{{r.name || r.title || r.caption}}</span>
@@ -203,8 +202,22 @@ class VueBlocksLayout implements LayoutInterface {
                 </nav>
                 <div class="main-container">
                     <router-view v-bind="$data"></router-view>
+                    <toast-container></toast-container>
                 </div>
             </div>
+            <script>
+            return class vue { 
+                computed = { 
+                    displayableRoutes() { 
+                        return this.$router.options.routes.filter(route => {
+                            const isDynamicRoute = route.path.match(/\/:[a-z]+/);
+                            const hideOnRequest = (route.name || route.title || route.caption) =="(hidden)";
+                            return !isDynamicRoute && !hideOnRequest;
+                        });
+                    }
+                }
+            }
+            </script>
         </template>
 
         HTML, $content);
@@ -258,6 +271,7 @@ class VueBlocksLayout implements LayoutInterface {
             'xbm' => 'image/xbm',
             'xml' => 'text/xml',
             'ttf' => 'font/ttf',
+            'woff' => 'font/woff',
             'woff2' => 'font/woff2',
             default => throw new \Exception('Could not determine mime-type for extension `'.$ext.'`')
         };
@@ -271,8 +285,8 @@ class VueBlocksLayout implements LayoutInterface {
         return $response;
     }
 
-    private $sharedData = [];
-    function setSharedData(array $sharedData) {
+    private array $sharedData = [];
+    function setSharedData(array $sharedData): void {
         $this->sharedData += $sharedData;
     }
 
