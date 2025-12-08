@@ -71,6 +71,7 @@ class DecoratedResponse implements ResponseInterface {
     }
 
     function logToString(): string { 
+        $this->getHeaders(false);
         return HttpClient::debugResponse($this->response);
     }
     
@@ -109,7 +110,9 @@ class DecoratedResponse implements ResponseInterface {
 
 
     function debug() { 
-        dd($this->getInfo('debug') . PHP_EOL . '(dd called in ' . __CLASS__ . ' on line ' . __LINE__ .')');
+        $e = new \Exception();
+        $trace = firstval(explode("\n", $e->getTraceAsString()));
+        dd($this->getInfo('debug') . PHP_EOL . '(dd called in '.$trace.')');
     }
 
     /**
@@ -180,6 +183,10 @@ class DecoratedResponse implements ResponseInterface {
             return $result;
         }
         return $this->toArray($throw);
+    }
+
+    function isSuccessful(): bool { 
+        return $this->getStatusCode() >= 200 && $this->getStatusCode() < 300;
     }
 }
 

@@ -8,6 +8,9 @@ services:
         tags: ['controller.service_arguments']
 
     Flux\Framework\:
+        # Prevent any of these framework services to be shared
+        # This is safer when working with a runtime like frankenphp.
+        shared: false
         resource: '../src/'
         tags: ['controller.service_arguments']
         exclude: 

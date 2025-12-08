@@ -2,6 +2,8 @@
 
 namespace Flux\Framework\Chain;
 
+use InvalidArgumentException;
+
 class BackgroundCommand implements \IteratorAggregate, \JsonSerializable {
     const TMP_DIR = '/tmp/shell-dispatched-commands/';
 
@@ -10,8 +12,12 @@ class BackgroundCommand implements \IteratorAggregate, \JsonSerializable {
     function __construct(string|array|BackgroundCommand $token) { 
         if ($token instanceof BackgroundCommand) {
             $this->token = $token->token;
-        } elseif (is_array($token) && isset($token['backgroundCommandId'])) {
-            $this->token = $token['backgroundCommandId'];
+        } elseif (is_array($token)) {
+            if (isset($token['backgroundCommandId'])) {
+                $this->token = $token['backgroundCommandId'];
+            } else { 
+                throw new InvalidArgumentException('Instantation of BackgroundCommand with array argument failed.');  
+            }
         } else {
             $this->token = $token;
         }
@@ -82,7 +88,7 @@ class BackgroundCommand implements \IteratorAggregate, \JsonSerializable {
 
         $outputPrefixes = [
             'stdout' => '',
-            'stderr' => 'stderr > ',
+            'stderr' => '',
         ];
 
 
@@ -111,7 +117,10 @@ class BackgroundCommand implements \IteratorAggregate, \JsonSerializable {
     }
 
     function jsonSerialize(): mixed { 
-        return ['backgroundCommandId' => $this->token];
+        return [
+            'backgroundCommandId' => $this->token, 
+            'token' => $this->token // This is here for psb1 backward compatibility.
+        ];
     }
 
     function getExitCode(): int { 
@@ -156,7 +165,7 @@ class BackgroundCommand implements \IteratorAggregate, \JsonSerializable {
             flush();
         };
 
-        $event = function(string $event, string $line = null, $position = null) use ($output) {
+        $event = function(string $event, ?string $line = null, $position = null) use ($output) {
             echo $event ? "event: $event\n" : "";
             $output($line, $position);
         };
@@ -168,12 +177,40 @@ class BackgroundCommand implements \IteratorAggregate, \JsonSerializable {
         // });
 
         foreach ($this->getIterator(true, true, $last_position) as $line) { 
-            $output($line, $this->serializePositions());
             if ($callback) {
-                $callback($line);
+                $value = $callback($line);
+                if ($value !== false) {
+                    $output($value, $this->serializePositions());
+                }
+            } else {
+                $output($line, $this->serializePositions());
             }
         }
         $event('exitcode', file_get_contents(static::TMP_DIR . $this->token.'/exitcode.txt'));
         $event('finished', 'bye', $this->serializePositions());
+    }
+
+    private bool $performAutoCleanup = false;
+    function cleanupWhenFinished(bool $performAutoCleanup = true) { 
+        $this->performAutoCleanup = $performAutoCleanup;
+    }
+
+    function __destruct()
+    {
+        if ($this->performAutoCleanup && !$this->isStillRunning()) { 
+            $this->cleanup();
+        }
+    }
+
+    private function cleanup(): void { 
+        try {
+            if (!$this->isStillRunning()) { 
+                if (static::TMP_DIR > '' && $this->token > '') { 
+                    (new Shell('rm -rf ?/?', static::TMP_DIR, $this->token))->run();
+                }
+            }
+        } catch (\Exception $e) { 
+            error_log('Error at ' . __METHOD__ . ': ' . $e->getMessage());
+        }
     }
 }

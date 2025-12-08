@@ -6,7 +6,7 @@ use Flux\Framework\Chain\BackgroundCommand;
 use Flux\Framework\Chain\Shell;
 
 class BackgroundPHP { 
-    private ?string $preamble;
+    protected ?string $preamble;
 
     function __construct() {
     }
@@ -58,7 +58,7 @@ class BackgroundPHP {
         return [$str, $uses];
     }
 
-    private function getPreamble() { 
+    protected function getPreamble() { 
         if ($this->preamble ?? false) {
             return $this->preamble;
         }
@@ -105,7 +105,7 @@ class BackgroundPHP {
         return $source;
     }
     
-    function dispatch(\Closure $closure): BackgroundCommand { 
+    function dispatch(\Closure $closure, ?string $preamble = null): BackgroundCommand { 
         // @fixme - als de source + closure static vars te groot is dan 
         // faalt de command-line aanroep en kreeg je leeg scherm.
         $refl = new \ReflectionFunction($closure);
@@ -118,7 +118,7 @@ class BackgroundPHP {
             $cwd = dirname($cwd);
         }
         
-        $source = '<?php ' . $this->getPreamble();
+        $source = '<?php ' . ($preamble ?? $this->getPreamble());
         if (str_contains($uses, '\Kernel')) { 
             $uses = str_replace('\Kernel','\Kernel2',$uses);
         }
@@ -138,18 +138,25 @@ class BackgroundPHP {
         }
         
         $source .= 'call_user_func(' . rtrim($fnSource, "\n;") . ');';
-        
+                
         $tempnam = tempnam('/tmp/', 'background-php-');
+
+        // dd($source);
+
         file_put_contents($tempnam, $source);
         
-        // Will throw if a syntax error occurs.
-        foreach (new Shell('php -l '. $tempnam) as $l) { }
+        try { 
+            (new Shell('php -l '. $tempnam))->run();
+        } catch (\Exception $e) {
+            // probably a syntax error in the file, bail.
+            throw $e;
+        }
         
-        return (new Shell('cd ' . $cwd.'; php '.$tempnam))->dispatchBackgroundCommand();
+        return (new Shell('cd ?; php ?; rm ?', $cwd, $tempnam, $tempnam))->dispatchBackgroundCommand();
     }
 
 
-    function __invoke(\Closure $closure): BackgroundCommand { 
-        return $this->dispatch($closure);
+    function __invoke(\Closure $closure, ?string $preamble = null): BackgroundCommand { 
+        return $this->dispatch($closure, $preamble);
     }
 }

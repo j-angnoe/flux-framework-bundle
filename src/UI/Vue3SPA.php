@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace Flux\Framework\UI;
 
 use Closure;
@@ -21,7 +19,7 @@ use Throwable;
 // Symfony must always provide a new instance, 
 // because this is configurable.
 #[Autoconfigure(shared: false)]
-class Vue2SPA
+class Vue3SPA
 {
     protected ?ServerBridgeInterface $bridge;
 
@@ -45,17 +43,6 @@ class Vue2SPA
     #[Required]
     public function setIoC(IoC $ioc): void { 
         $this->ioc = $ioc;
-    }
-
-
-    private ?string $csrfToken = null;
-    public function setCsrfToken(string $csrfToken): void { 
-        $this->csrfToken = $csrfToken;
-    }
-
-    private ?string $authToken = null;
-    public function setAuthToken(string $authToken): void { 
-        $this->authToken = $authToken;
     }
 
     public function setup(ServerBridgeInterface|LayoutInterface ...$elements): void { 
@@ -122,7 +109,7 @@ class Vue2SPA
 
     public function serveSPA(object $controller, Request $request, string|array $SPAFiles): Response {         
         $isXhr = $request->isXmlHttpRequest();
-                
+
         return $this->serve($controller, $request, function () use ($isXhr, $SPAFiles) {
             if (!is_array($SPAFiles)) { 
                 $SPAFiles = [$SPAFiles];
@@ -150,14 +137,6 @@ class Vue2SPA
     function resolveArgument(string $className, Closure $factory): void{ 
         $this->argumentResolvers[$className] = $factory;
     }
-
-    private ?string $autocloseSessionUnlessInterface = null;
-    function autocloseSessionUnlessInterface(string $sessionInterface) { 
-        if (!interface_exists($sessionInterface)) { 
-            throw new \Exception(__METHOD__ . ' expects marker interface `'.$sessionInterface.'` to exist in this project.');
-        }
-        $this->autocloseSessionUnlessInterface = $sessionInterface;
-    }
     public function serve(object $controller, Request $request, string|Closure $content): Response
     
     {
@@ -169,33 +148,15 @@ class Vue2SPA
         if (method_exists($bridge, 'setIoC')) { 
             $bridge->setIoC($this->ioc ?? new IoC);
         }
-        if ($this->csrfToken) {     
-            $bridge->setCsrfToken($this->csrfToken);
-        }
-
-        if ($this->authToken) {     
-            $bridge->setAuthToken($this->authToken);
-        }
-        
         $bridge->setController($controller);
         if (method_exists($bridge, 'setArgumentResolvers')) { 
             $bridge->setArgumentResolvers($this->argumentResolvers);
         }
 
-        if ($this->autocloseSessionUnlessInterface) { 
-            if (!is_subclass_of($controller, $this->autocloseSessionUnlessInterface)) { 
-                try { 
-                    $request->getSession()->save();
-                } catch (Throwable){ }
-            }
-        }
+    
 
         if ($bridge->isDispatchRequest($request)) {
-            $response = $bridge->dispatch($request);   
-            if ($this->authToken) {     
-                $response->headers->set('X-Auth-Token', $this->authToken);
-            }
-            return $response;
+            return $bridge->dispatch($request);   
         }
 
         try { 
@@ -230,9 +191,7 @@ class Vue2SPA
         $content = HtmlUtils::prepend('head','<base href="'.$request->getPathInfo().'">', $content);
         
         $response = new Response($content, 200, ['Content-type' => 'text/html']);
-        if ($this->authToken) {     
-            $response->headers->set('X-Auth-Token', $this->authToken);
-        }
+
         if ($request->isXmlHttpRequest()) {      
             $response->headers->set(AbstractSessionListener::NO_AUTO_CACHE_CONTROL_HEADER, 'true');
             $response->setPublic();

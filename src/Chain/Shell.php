@@ -3,8 +3,8 @@
 namespace Flux\Framework\Chain;
 
 use Flux\Framework\BackgroundPHP;
+use Generator;
 use IteratorAggregate;
-use JsonSerializable;
 use Traversable;
 
 class RuntimeExceededException extends \Exception { } 
@@ -78,11 +78,20 @@ class Shell implements \IteratorAggregate {
     private ?string $stdoutFile = null;
     private ?string $stderrFile = null;
     private ?string $pidfile = null;
+    private array $_ENV = [];
 
     function __construct(?string $command = null, mixed ...$args) { 
         if ($command) { 
             $this->commands = [static::formatCommand($command, ...$args)];
         }
+        $this->_ENV = $_ENV;
+    }
+
+    function clearEnv() { 
+        $this->_ENV = [];
+    }
+    function env(string $key, string $value) { 
+        $this->_ENV[$key] = $value;
     }
 
     function pipe(string $command, mixed ...$args): static { 
@@ -100,6 +109,12 @@ class Shell implements \IteratorAggregate {
     function redirectStderr(string $filename): static { 
         $this->stderrFile = $filename;
         // touch($this->stderrFile);
+        return $this;
+    }
+
+    function redirectAll(string $filename): static { 
+        $this->redirectStdout($filename);
+        $this->redirectStderr($filename);
         return $this;
     }
 
@@ -207,6 +222,7 @@ class Shell implements \IteratorAggregate {
         yield from $flushLastLines();
     }
 
+
     /**
      * a simplified shell runner, more in tune to what we usually use it for.
      */
@@ -215,17 +231,32 @@ class Shell implements \IteratorAggregate {
         $command = join(" | \\\n", $this->commands);
         if (!($this->pidfile ?? false)) { 
             $pidfile = $this->pidfile ?: tempnam(ensure_dir('/tmp/shells/'), 'pid-');
-            $exitfile = $pidfile.'.exit';
+            $exitfile = $pidfile.'.exit';  
+
+            register_shutdown_function(function() use ($exitfile) {
+                if (file_exists($exitfile)) { 
+                    unlink($exitfile);
+                }
+            });
         } else {
             $pidfile = $this->pidfile;
             $exitfile = dirname($this->pidfile) . '/exitcode.txt';
         }
+
         $wrappedCommand = static::formatCommand("echo \$\$ > ?; set -e; set -o pipefail; $command", $pidfile);
+
+        $twoToOne = '';
+        if ($this->stdoutFile === $this->stderrFile) { 
+            $twoToOne = '2>&1';
+            $this->stderrFile = '/dev/null';
+        }
+
         $wrappedCommand = static::formatCommand(
-            'bash -c ?; exit_code=$?; echo $exit_code > ?; rm ?; exit $exit_code', 
+            'bash -c ? %s; exit_code=$?; echo $exit_code > ?; rm ?; exit $exit_code', 
                 $wrappedCommand,
-                    $exitfile,
-                    $pidfile,
+                $twoToOne,
+                $exitfile,
+                $pidfile,
         );
         
         $descr = [
@@ -234,7 +265,7 @@ class Shell implements \IteratorAggregate {
             $this->stderrFile ? ['file', $this->stderrFile, 'w'] : ['pipe','w'],
         ];
 
-        $proc = proc_open($wrappedCommand, $descr, $pipes, null, $_ENV);
+        $proc = proc_open($wrappedCommand, $descr, $pipes, null, $this->_ENV);
         
         if ($this->stdoutFile) { 
             $pipes[1] = fopen($this->stdoutFile, 'r');
@@ -261,7 +292,7 @@ class Shell implements \IteratorAggregate {
 
         $startTime = microtime(true);
 
-        $runWhile = function () use ($pipes, $startTime, $proc) {
+        $runWhile = function () use ($pipes, $startTime) {
             $elapsedMilliseconds = 1000 * (microtime(true) - $startTime);
 
             if (isset($this->runtimeMilliseconds) && $this->runtimeMilliseconds > 0) {
@@ -324,13 +355,30 @@ class Shell implements \IteratorAggregate {
                 ));
             }
         }
+
+        return $status;
     }
+
+    function run(): int { 
+        /** @var \Generator $generator */
+        $generator = $this->getIterator();
+        foreach ($generator as $_) { } 
+        
+        $returnValue = $generator->getReturn();
+
+        return $returnValue['exitcode'];
+    }
+
+    function toString(...$args): string { 
+        return chain($this)->toString(...$args);
+    }
+
 
     /**
      * Yields a buffer 
      */
-    function whileRunning($tickRatePerSecond = 3, bool $yieldBuffer = false) { 
-        $timeout = 1 / $tickRatePerSecond;
+    function whileRunning(float $tickRatePerSecond = 3, bool $yieldBuffer = false): Generator { 
+        $timeout = 1.0 / $tickRatePerSecond;
         $lastYield = microtime(true);
         
         $buffer = null;
@@ -364,7 +412,21 @@ class Shell implements \IteratorAggregate {
             mkdir($dir, 0777, true);
         }
 
-        $this->redirectStdout("$dir/stdout.txt");
+        if ($this->stdoutFile) { 
+            if (!is_dir(dirname($this->stdoutFile))) { 
+                mkdir(dirname($this->stdoutFile), 0777, true);
+            }
+            touch($this->stdoutFile);
+            symlink($this->stdoutFile, "$dir/stdout.txt");
+        }
+        if ($this->stderrFile) { 
+            if (!is_dir(dirname($this->stderrFile))) { 
+                mkdir(dirname($this->stderrFile), 0777, true);
+            }
+            touch($this->stderrFile);
+            symlink($this->stderrFile, "$dir/stderr.txt");
+        }
+        $this->redirectStdout("$dir/stdout.txt");   
         $this->redirectStderr("$dir/stderr.txt");
         $this->enablePidFile("$dir/pid.txt");
         $this->setRuntime(1);

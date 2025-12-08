@@ -939,23 +939,16 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable, Countable
 			}
 
 			$chars = array_map('array_unique', $chars);
-			$candidates = array_filter($chars, function($i) { 
-				if (count($i) === 1 && reset($i) > 0) { 
-					return true;
-				}
-				return false;
+			uasort($chars, function($a,$b) {
+				return array_sum($b) <=> array_sum($a);
 			});
 
-			uasort($candidates, function($a,$b) {
-				return count($a) <=> count($b);
-			});
-
-			$separator = array_key_first($candidates);			
+			$separator = array_key_first($chars);			
 
 			foreach ($buffer as $b) { 
-				
 				yield !$separator ? $b : str_getcsv($b, $separator, $enclosure, $escape);
 			}
+			$iterator->next();
 			if ($iterator->valid()) { 
 				foreach (new NoRewindIterator($iterator) as $i) { 
 					yield !$separator ? $i : str_getcsv($i, $separator, $enclosure, $escape);
@@ -971,10 +964,13 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable, Countable
 
 		if ($interpretFirstLineAsHeaders) { 
 			return $this->apply(function($iterator) { 
-				$headers = $iterator->current();
+				$headers = $iterator->current();				
 				$iterator->next();
 				if ($iterator->valid()) { 
 					foreach (new \NoRewindIterator($iterator) as $line) {
+						if (count($headers) !== count($line)) { 
+							dd([$headers, $line]);
+						}
 						yield array_combine($headers, $line);
 					}
 				}
@@ -982,6 +978,10 @@ class Chain implements IteratorAggregate, JsonSerializable, Chainable, Countable
 		} else {
 			return $this;
 		}
+	}
+
+	static function from(mixed $source): static { 
+		return new static($source);
 	}
 
 	/**

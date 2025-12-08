@@ -19,7 +19,7 @@ trait CacheTrait {
 		return $this;
 	}
 
-	function cache($expires, ...$args): self {
+	function cache($expires, ...$args): static {
 		$args = func_get_args();
 		$options = [];
 		if (is_array($args[count($args)-1])) {

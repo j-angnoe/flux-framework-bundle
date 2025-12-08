@@ -7,8 +7,6 @@ trait ShellTrait {
         return Shell::formatCommand(...$args);
 	}
 
-    private object $shell;
-
     /**
      * a simplified shell runner, more in tune to what we usually use it for.
      */

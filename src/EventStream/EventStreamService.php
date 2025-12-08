@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flux\Framework\EventStream;
 
+use Closure;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
@@ -19,6 +20,7 @@ class EventStreamService
     private float $lastWriteAt = 0;
     private array $buffer = [];
     private bool $started = false;
+    private ?Closure $runWhile = null;
 
     public function __construct(private Request $request)
     {
@@ -73,7 +75,7 @@ class EventStreamService
             try { 
                 $this->request->getSession()->save();
                 session_write_close();
-            } finally { }
+            } catch (\Throwable $e) {} 
         } 
 
 
@@ -160,6 +162,10 @@ class EventStreamService
                 }
             }
 
+            if ($this->runWhile && !call_user_func($this->runWhile)) { 
+                break;
+            }
+
             if (empty($updateStreams)) { 
                 break;
             }
@@ -175,12 +181,18 @@ class EventStreamService
             usleep(intval(max(0, (10e5 / ($maxBeatsPerMinute / 60)) - ($loopElapsed))));
         }
 
-        if (empty($updateStreams)) { 
+        if (empty($updateStreams) || ($this->runWhile && !call_user_func($this->runWhile))) { 
             $this->sendEvent('finished', 'bye');
         }
+        
         if ($exit) {
             exit();
         }
+    }
+
+    public function runWhile(callable $callback): void
+    {
+        $this->runWhile = $callback;
     }
 
     public function send(string $lines, mixed $offset = null): void

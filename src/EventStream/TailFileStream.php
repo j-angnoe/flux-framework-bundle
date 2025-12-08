@@ -11,6 +11,8 @@ class TailFileStream implements UpdateStream {
     /** @var resource $fh */
     private $fh;
 
+    private string $filename;
+
     function __construct(
         mixed $filename,
         private string $channel = 'message',
@@ -18,11 +20,7 @@ class TailFileStream implements UpdateStream {
         private int $updatesPerTick = 1000,
         private ?\Closure $transform = null
     ) { 
-        if (is_string($filename)) {
-            $this->fh = fopen($filename, 'r');
-        } else if (is_resource($filename)) { 
-            $this->fh = $filename;
-        }
+        $this->filename = $filename;
     } 
 
     function setTransform(?\Closure $transform) { 
@@ -34,7 +32,7 @@ class TailFileStream implements UpdateStream {
     }
 
     public function isEndOfFile(): bool { 
-        return feof($this->fh);
+        return !$this->fh || feof($this->fh);
     }
 
     private ?\Closure $endOfStreamDetector;
@@ -53,6 +51,22 @@ class TailFileStream implements UpdateStream {
     }
 
     public function nextUpdate(mixed $lastPosition): mixed {     
+        if (!isset($this->fh)) {  
+            for($i=0; $i<100; $i++) { 
+                if (file_exists($this->filename)) { 
+                    $this->fh ??= fopen($this->filename, 'r');
+                    break;
+                }
+                // hand control back to the event stream service
+                yield null;
+                usleep(25_000);
+            }
+
+            if (!$this->fh) {
+                return null;
+            }
+        }
+
         try {            
             if ($lastPosition) fseek($this->fh, $lastPosition);
         } catch (\Throwable) { 

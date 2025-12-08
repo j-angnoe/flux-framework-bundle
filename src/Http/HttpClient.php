@@ -14,6 +14,7 @@ use Symfony\Component\HttpClient\HttpClient as SymfonyHttpClient;
 use Symfony\Contracts\Service\ResetInterface;
 use Traversable;
 use Closure;
+use Symfony\Component\HttpClient\UriTemplateHttpClient;
 
 class HttpClient implements HttpClientInterface {
     static $HTTP_STATS = [
@@ -30,12 +31,16 @@ class HttpClient implements HttpClientInterface {
         $this->client = $client ?? SymfonyHttpClient::create();
         $this->clientInits = $inits ? (is_array($inits) ? $inits : [$inits]) : [];
     }
+    
+    public array $constructorOptions = [];
 
     public function withOptions(array $options): static
     {
+                
         $clone = clone $this;
+        $clone->constructorOptions = array_merge($clone->constructorOptions, $options);
         $clone->client = $this->client->withOptions($options);
-
+        
         return $clone;
     }
 
@@ -47,11 +52,15 @@ class HttpClient implements HttpClientInterface {
     }
 
     static function create(array $defaultOptions = [], int $maxHostConnections = 6, int $maxPendingPushes = 50) { 
-        return new static(SymfonyHttpClient::create($defaultOptions, $maxHostConnections, $maxPendingPushes));
+        $obj = new static(SymfonyHttpClient::create($defaultOptions, $maxHostConnections, $maxPendingPushes));
+        $obj->constructorOptions = $defaultOptions;
+        return $obj;
     }
     
     public static function createForBaseUri(string $baseUri, array $defaultOptions = [], int $maxHostConnections = 6, int $maxPendingPushes = 50): HttpClientInterface {
-        return new static(SymfonyHttpClient::createForBaseUri($baseUri, $defaultOptions, $maxHostConnections, $maxPendingPushes));
+        $obj = new static(SymfonyHttpClient::createForBaseUri($baseUri, $defaultOptions, $maxHostConnections, $maxPendingPushes));
+        $obj->constructorOptions = $defaultOptions;
+        return $obj;
     }
 
     protected function getHttpClient(): HttpClientInterface { 
@@ -80,7 +89,7 @@ class HttpClient implements HttpClientInterface {
             return $client->request($method, $url, $options);
         }
         
-        $options['user_data'] ??= $options['body'] ?? null;
+        $options['user_data'] ??= $options['body'] ?? $options['json'] ?? null;
         if (!is_string($options['user_data'])) { 
             $options['user_data'] = json_encode($options['user_data']);
         }
@@ -102,10 +111,15 @@ class HttpClient implements HttpClientInterface {
             return $response->getInfo('debug');
         }
         $debugInfo = $response->getInfo('debug') ?: '';
-
         $pieces = preg_split("~(\r*\n){2}~", $debugInfo);
+
+        if (empty($pieces)) { 
+            $response->getContent(false);
+            $debugInfo = $response->getInfo('debug') ?: '';
+            $pieces = preg_split("~(\r*\n){2}~", $debugInfo);
+        }
         if (count($pieces) < 2) { 
-            return firstval($pieces) ?: print_r($response->getInfo(), true);
+            return firstval($pieces) ?: print_r($response->getInfo(),true);
         }
         
         // Remove the thousand lines of SSL Certificate negotiation.
@@ -266,5 +280,18 @@ class HttpClient implements HttpClientInterface {
             return static::$HTTP_STATS[$key];
         }
         return array_filter(static::$HTTP_STATS);
+    }
+
+    public function __serialize(): array { 
+        throw new \Exception('Attempt to serialize HttpClient... which is not supported');
+        
+        return [
+            'constructorOptions' => $this->constructorOptions,
+        ];
+    }
+
+    public function __unserialize(array $data): void {
+        $this->constructorOptions = $data['constructorOptions'];
+        $this->client = SymfonyHttpClient::create($this->constructorOptions);
     }
 }

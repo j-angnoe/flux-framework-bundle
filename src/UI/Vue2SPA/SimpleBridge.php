@@ -9,6 +9,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedJsonResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class SimpleBridge implements ServerBridgeInterface { 
@@ -28,6 +29,7 @@ class SimpleBridge implements ServerBridgeInterface {
     private function isEventStreamRequest($request): bool { 
         return str_contains($request->headers->get('accept') ?: '','text/event-stream');
     }
+
     public function isDispatchRequest(Request $request): bool
     {
         if ($request->isXmlHttpRequest()) {   
@@ -45,6 +47,18 @@ class SimpleBridge implements ServerBridgeInterface {
         }
         
         return false;
+    }
+
+
+    private ?string $csrfToken = null;
+    public function setCsrfToken(string $csrfToken): void
+    {
+        $this->csrfToken = $csrfToken;
+    }
+
+    private ?string $authToken = null;
+    public function setAuthToken(string $authToken): void { 
+        $this->authToken = $authToken;
     }
 
     private array $argumentResolvers = [];
@@ -114,6 +128,14 @@ class SimpleBridge implements ServerBridgeInterface {
             }
         }
 
+        if ($result instanceof StreamedResponse){  
+            // if ($request->hasSession()) { 
+            //     $request->getSession()->save();
+            // }
+            
+            ob_implicit_flush(true);
+            while(ob_get_level()) { ob_end_flush(); }
+        }
         return $result;
     }
 
@@ -129,11 +151,26 @@ class SimpleBridge implements ServerBridgeInterface {
         HTML;
     }
     function generateJavascriptClient(Request $request): string
-    {        
-        return str_replace('RELEASE_ID', urlencode($_ENV['APP_RELEASE_ID'] ?? ''), <<<'HTML'
+    {       
+        
+        $csrfToken = $this->csrfToken;
+        
+        return str_replace(
+            [
+                'RELEASE_ID', 
+                '%CSRF_TOKEN%',
+                '%AUTH_TOKEN%',
+            ],
+            [
+                urlencode($_ENV['APP_RELEASE_ID'] ?? ''), 
+                $csrfToken ?: '',
+                $this->authToken ?: '',
+            ], 
+        <<<'HTML'
         <script>
-            var responseHandler = async (res) => {
-                if (res.ok) return res.json();
+            
+            var errorHandler = async (res) => {
+                if (res.ok) return res;
 
                 if (!Vue.options.components['display-server-error']) {
                     let msg;
@@ -178,25 +215,49 @@ class SimpleBridge implements ServerBridgeInterface {
                 return Promise.reject(res);
             };
 
-            var postCall = (url, json) => {
-                return fetch(url, {
+            var responseHandler = (res) => {
+                if (res.ok) {
+                    return res.json();
+                } else {
+                    return errorHandler(res);
+                }
+            }
+            
+            var postCall = (url, json, abort) => {
+                abort ??= new AbortController;
+                var headers = {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                };
+                if ('%CSRF_TOKEN%') { 
+                    headers['X-Csrf-Token'] = '%CSRF_TOKEN%';
+                }
+                if ('%AUTH_TOKEN%') { 
+                    headers['X-Auth-Token'] = '%AUTH_TOKEN%';
+                }
+                var promise = fetch(url, {
                     method: 'POST',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(json)
-                })
+                    headers: headers,
+                    body: JSON.stringify(json),
+                    signal: abort.signal || signal || null
+                }).then(res => {
+                    res.abort = res.cancel = () => {
+                        abort.abort();
+                    }
+                    return res;
+                });
+                return promise;
             }
 
             function addCacheBust(url) {
                 return url + (~url.indexOf('?') ? '&' : '?') + '_=RELEASE_ID'
             };
-
             function createSimpleBridge(baseUri) {
                 baseUri = `${baseUri}`.split('#')[0];
 
+                var memo = {};
+                var pendingMemos = {};
                 return new Proxy({
                     call(url, post) {
                         return postCall(url, post).then(responseHandler);
@@ -207,17 +268,81 @@ class SimpleBridge implements ServerBridgeInterface {
                             return obj[methodName];
                         }
                         var fn = function(...args) {
+                            return fn.raw(...args).then(responseHandler);
+                        }   
+
+                        fn.raw = (...args) => {
                             var href = baseUri;
+                            var abort = null;
+                            args = args.filter(a => {
+                                if (a && a.abort) {
+                                    abort = a
+                                    return false;
+                                }
+                                return true;
+                            });
                             return postCall(addCacheBust(href + '?' + methodName), {
                                 rpc: [methodName,args]
-                            }).then(responseHandler);
-                        }   
+                            }, abort).then(errorHandler);   
+                        }
+
                         fn.curry = function(...curriedArgs) { 
                             var fn2 = (...args) => fn(...[...curriedArgs, ...args]);
                             fn2.eventStream = (...args) => fn.eventStream(...[...curriedArgs, ...args]);
                             fn2.post = (...args) => fn.post(...[...curriedArgs, ...args]);
                             return fn2;
                         }   
+
+                        fn.memoize = async function(...args) { 
+                            var key = JSON.stringify(args);
+                            var abort = new AbortController;
+
+                            memo[methodName] ??= {};
+                            Object.values(memo[methodName]).forEach(p => {
+                                p.abort()
+                            });
+                            memo[methodName][key] ??= fn(...args, abort);
+                            memo[methodName][key].abort = () => abort.abort()
+
+                            return await memo[methodName][key];
+                        }
+
+                        fn.stream = async function* (...args) { 
+                            // @deprecated
+                            // prefer to use something that is bound to vue component.
+
+                            const href = baseUri;
+                            const response = await postCall(addCacheBust(href + '?' + methodName), {
+                                rpc: [methodName,args]
+                            });
+
+                            const reader = response.body.getReader();
+                            const decoder = new TextDecoder();
+
+                            let buffer = '';
+
+                            while(true) {
+                                let {done, value} = await reader.read();
+                                
+                                if (done && !value) {
+                                    console.log('stream complete');
+                                    break;
+                                }
+                                
+                                buffer += decoder.decode(value, {stream:true});
+                                let lines = buffer.split('\n');
+                                buffer = lines.pop();
+
+                                console.log('buffer', buffer)
+                                for (let line of lines) { 
+                                    console.log('yielding', line);
+                                    yield line;
+                                }
+                            }            
+                            if (buffer) { 
+                                yield buffer;
+                            }           
+                        }
                         fn.eventStream = function (...args) { 
                             var href = baseUri;
                             var es;
@@ -226,7 +351,12 @@ class SimpleBridge implements ServerBridgeInterface {
                             var reconnects = 0;
                             var reconnect = () => {
                                 if (es) { es.close(); es = null } ;
-                                es = new EventSource(href + (~href.indexOf('?') ? '&' : '?') + 'eventstream=1&rpc=' + encodeURIComponent(JSON.stringify([methodName, args])), {
+                                var url = href + (~href.indexOf('?') ? '&' : '?') + 'eventstream=1&rpc=' + encodeURIComponent(JSON.stringify([methodName, args]));
+                                var authToken = '%AUTH_TOKEN%';
+                                if (authToken) { 
+                                    url += '&_auth=' + encodeURIComponent(authToken);
+                                }
+                                es = new EventSource(url, {
                                     withCredentials: true
                                 });
                                 listeners.forEach(([key, value, options]) => {
@@ -283,12 +413,13 @@ class SimpleBridge implements ServerBridgeInterface {
                                                 });
                                             }
                                         })
+                                    } else { 
+                                        addEventListener(eventName, event => {
+                                            globalThis.requestIdleCallback(() => {
+                                                callback(event.data);
+                                            });
+                                        }, options);
                                     }
-                                    addEventListener(eventName, event => {
-                                        globalThis.requestIdleCallback(() => {
-                                            callback(event.data);
-                                        });
-                                    }, options);
                                 }
                             }
                         }
@@ -311,6 +442,22 @@ class SimpleBridge implements ServerBridgeInterface {
                             input.value = JSON.stringify([methodName, args]);
                             form.appendChild(input);
 
+                            const csrfToken = '%CSRF_TOKEN%';
+                            if (csrfToken) { 
+                                const input = document.createElement('input');
+                                input.name = '_csrf';
+                                input.value = csrfToken;
+                                form.appendChild(input);
+                            }
+
+                            const authToken = '%AUTH_TOKEN%';
+                            if (authToken) { 
+                                const input = document.createElement('input');
+                                input.name = '_auth';
+                                input.value = authToken;
+                                form.appendChild(input);
+                            }
+
                             var button = document.createElement('button');
                             button.innerHTML = 'submit';
                             form.appendChild(button);
@@ -324,7 +471,12 @@ class SimpleBridge implements ServerBridgeInterface {
                 });
             }
             window.createSimpleBridge = createSimpleBridge;
+            window.createSimpleBridge.responseHandler = responseHandler;
+            window.createSimpleBridge.errorHandler = errorHandler;
+            
+            window.connectToEndpoint = window.createSimpleBridge;
             window.server = createSimpleBridge(document.location);
+
         </script>
         HTML);
     }

@@ -121,6 +121,9 @@ window.VueBlocks = VueBlocks;
 					// noop.
 					console.log('NOOP Restore');
 				},
+				forget() {
+					storage.removeItem(storageKey);
+				},
 				unlink: () => {
 					clearTimeout(watcherWriteValueTimeout);
 					unwatcher();
@@ -157,6 +160,13 @@ window.VueBlocks = VueBlocks;
 				try { 
 					this.__linksToStorage[key].unlink();
 				} catch (ignore) {} 
+			},
+			forget: () => { 
+				try { 
+					this.__linksToStorage[key].forget();
+				} catch (ignore) {
+
+				} 
 			}
 		}
 	};
@@ -176,7 +186,7 @@ window.VueBlocks = VueBlocks;
 	var autoSaveHandlers = [];
 	
 	document.addEventListener('keydown', async (event) => {
-		if (event.ctrlKey && event.key === "s") {
+		if ((event.ctrlKey || event.metaKey) && event.key === "s") {
 			if (event.defaultPrevented) { 
 				return;
 			}

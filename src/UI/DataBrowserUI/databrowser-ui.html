@@ -171,6 +171,8 @@
                     @keydown.enter.stop.prevent="performSearch(quicksearch)"
                     @keyup.esc="quicksearch = ''; performSearch('')"
                     @keydown.ctrl.p.prevent="printMode"
+                    @keydown.meta.p.prevent="printMode"
+
                 >
                 <div class="input-group-append">
                     <button 
