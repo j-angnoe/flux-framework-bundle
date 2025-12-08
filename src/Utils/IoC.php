@@ -5,7 +5,9 @@ use ArgumentCountError;
 use Psr\Container\ContainerInterface;
 use ReflectionFunction;
 use ReflectionFunctionAbstract;
+use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 
+#[Autoconfigure(shared: false)]
 class IoC implements ContainerInterface {
     private array $services = [];
 
