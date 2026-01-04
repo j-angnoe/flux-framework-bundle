@@ -20,11 +20,12 @@ trait CacheTrait {
 	}
 
 	function cache($expires, ...$args): static {
-		$args = func_get_args();
 		$options = [];
 		if (is_array($args[count($args)-1])) {
 			$options = &$args[count($args)-1];
-		} 
+		} elseif (count($args) == 1 && is_string($args[0])) {
+			$options['id'] = $args[0];
+		}
 		$expires = is_array($expires) ? $options['expires'] : $expires;
 		$shouldRefreshCache = $options['refreshCache'] ?? false;
 		unset($options['refreshCache']); // so it wont affect the id.
