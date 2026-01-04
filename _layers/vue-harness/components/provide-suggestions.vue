@@ -136,20 +136,9 @@ export default {
 
             console.log(this.search, 'search from target');
         } else {
-            this.search = this.$el.querySelector('input');
-            if (!this.search) {
-                var promise = new Promise((resolve) => {
-                    var keydownListener = event => {
-                        if (event.target.matches('input') && this.$el.contains(event.target)) {
-                            resolve(event.target);
-                            document.removeEventListener('keydown', keydownListener);
-                        }
-                    };
-                    document.addEventListener('keydown', keydownListener);
-                });
-                this.search = await promise;
-                console.log("Found search ", this.search);
-            }
+            await wait(100);
+            this.search = [...this.$el.querySelectorAll('input')].pop();
+            console.log('Provide-suggestions using search ', this.search);
         }
 
 
@@ -166,21 +155,66 @@ export default {
         }
         this.$refs.sc.style.marginLeft = (this.search.offsetLeft - this.$el.offsetLeft) + 'px';
 
-        this.search.addEventListener('input', event => {
-            if (this.focus) {
-                this.performSearchDebounced(event.target.value);
-            }
-        })
         var blurTimeout;
-        this.search.addEventListener('focus', event => {
-            this.focus = true;
-            clearTimeout(blurTimeout);
-        });
-        this.search.addEventListener('blur', event => {
-            clearTimeout(blurTimeout);
-            blurTimeout = setTimeout(() => {
-                this.focus = false;
-            }, 100);
+        [...this.$el.querySelectorAll('input,textarea')].forEach(search => {
+            search.addEventListener('input', event => {
+                if (this.focus) {
+                    this.performSearchDebounced(event.target.value);
+                }
+            })
+            search.addEventListener('focus', event => {
+                this.focus = true;
+                this.search ??= search;
+                clearTimeout(blurTimeout);
+            });
+            search.addEventListener('blur', event => {
+                clearTimeout(blurTimeout);
+                blurTimeout = setTimeout(() => {
+                    this.focus = false;
+                }, 100);
+            });
+
+            search.addEventListener('keydown', event => {
+                this.focus = true;
+                this.search ??= search;
+                if (event.key == 'Escape') {
+                    this.resolve(null);
+                    event.preventDefault();
+                }
+                if (event.key === 'Tab' && event.shiftKey) { 
+                    return;
+                }
+
+                var doSelectValue = event.key == 'Enter' || event.key === 'Tab';
+                
+                // if (this.$attrs.separator) { 
+                //     doSelectValue = doSelectValue || event.key.match(this.$attrs.separator);
+                // }
+                if (doSelectValue) {
+                    if (this.lastResolved === this.suggestions[this.selectedIndex]) {
+                        this.suggestions = null;
+                        return;
+                    } else if (this.suggestions) {
+                        this.lastResolved = this.suggestions[this.selectedIndex];
+                        this.resolve(this.suggestions[this.selectedIndex]);
+                        event.preventDefault();
+                    }
+                    if (event.ctrlKey || event.metaKey || event.key === 'Tab') {
+                        event.preventDefault();
+                        // Als je ctrl+enter doet dan sluiten we de
+                        // suggesties sowieso. (zeker ook met ook op multi mode)
+                        this.focusNext();
+                    }
+                }
+                if (event.key.match(/(ArrowUp|ArrowDown)/)) {
+                    event.preventDefault();
+                    if (this.suggestions) {
+                        this.selectedIndex += (event.key == 'ArrowUp') ? -1 : 1;
+                        this.selectedIndex += this.suggestions.length;
+                        this.selectedIndex %= this.suggestions.length;
+                    }
+                }
+            })
         });
 
         this.$refs.sc.addEventListener('mousedown', event => {
@@ -191,47 +225,6 @@ export default {
 
         this.focus = this.search == document.activeElement;
 
-        this.search.addEventListener('keydown', event => {
-            this.focus = true;
-
-            if (event.key == 'Escape') {
-                this.resolve(null);
-                event.preventDefault();
-            }
-            if (event.key === 'Tab' && event.shiftKey) { 
-                return;
-            }
-
-            var doSelectValue = event.key == 'Enter' || event.key === 'Tab';
-            
-            // if (this.$attrs.separator) { 
-            //     doSelectValue = doSelectValue || event.key.match(this.$attrs.separator);
-            // }
-            if (doSelectValue) {
-                if (this.lastResolved === this.suggestions[this.selectedIndex]) {
-                    this.suggestions = null;
-                    return;
-                } else if (this.suggestions) {
-                    this.lastResolved = this.suggestions[this.selectedIndex];
-                    this.resolve(this.suggestions[this.selectedIndex]);
-                    event.preventDefault();
-                }
-                if (event.ctrlKey || event.metaKey || event.key === 'Tab') {
-                    event.preventDefault();
-                    // Als je ctrl+enter doet dan sluiten we de
-                    // suggesties sowieso. (zeker ook met ook op multi mode)
-                    this.focusNext();
-                }
-            }
-            if (event.key.match(/(ArrowUp|ArrowDown)/)) {
-                event.preventDefault();
-                if (this.suggestions) {
-                    this.selectedIndex += (event.key == 'ArrowUp') ? -1 : 1;
-                    this.selectedIndex += this.suggestions.length;
-                    this.selectedIndex %= this.suggestions.length;
-                }
-            }
-        })
 
         console.log(Object.keys(this.$attrs));
 
