@@ -66,8 +66,8 @@ class EventStreamService
         $this->updateStreams[] = $updateStream;
     }
 
-    public function start(float $maxRuntimeInMinutes = 1, $exit = true, bool $debug = false): void
-    {
+    public function sendEventStreamHeaders() { 
+
         if (PHP_SAPI !== 'cli') {
             while(ob_get_level()) {
                 ob_end_clean();
@@ -78,7 +78,6 @@ class EventStreamService
             } catch (\Throwable $e) {} 
         } 
 
-
         if ($this->isEventStreamRequest()) {
             if (PHP_SAPI !== 'cli') {
                 header('HTTP/1.1 200');
@@ -87,6 +86,11 @@ class EventStreamService
         } else {
             throw new Exception('startEventStream() on a non event-stream http request');
         }
+    }
+    public function start(float $maxRuntimeInMinutes = 1, $exit = true, bool $debug = false): void
+    {
+        $this->sendEventStreamHeaders();
+
         $this->started = true;
 
         if ($this->buffer) {
@@ -266,4 +270,23 @@ class EventStreamService
         }
         $this->sendEvent('finished', $data);
     }
+
+    function tick($milliseconds = 100) {
+        $counter = 0;
+        do {
+            $isStillRunning = call_user_func($this->runWhile);
+            $counter++; 
+            yield null;
+
+            usleep(1000 * max(25, $milliseconds));
+        } while (!connection_aborted() && $isStillRunning);
+
+        usleep(25 * 1000);
+        
+        // A last yield to flush everything.
+        yield null;
+
+        $this->sendFinished();
+    }
+
 }

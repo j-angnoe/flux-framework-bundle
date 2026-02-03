@@ -159,7 +159,12 @@ class VueBlocksLayout implements LayoutInterface {
     }
 
     private function ensureDefaultEntrypoint(string $content): string { 
-        $sharedData = json_encode((object) $this->sharedData);
+        $sharedData = [];
+        foreach ($this->sharedData as $key => $value) {
+            $value = $value instanceof Closure ? $value() : $value;
+            $sharedData[$key] = $value;
+        }
+        $sharedData = json_encode((object) $sharedData);
 
         if (!preg_match('~<app\s*>~', $content)) {
             $content = HtmlUtils::append('body', '<app app-data=\''.$sharedData.'\'></app>' . "\n", $content);
